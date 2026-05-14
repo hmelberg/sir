@@ -32,7 +32,10 @@ sir/
 │   ├── interventions.py    # Intervention dataclass + standard library + vax
 │   ├── simulation.py       # daily loop
 │   ├── monte_carlo.py      # parallel MC runs
+│   ├── psa.py              # PSA: TOML spec, sampling, runner
 │   └── plots.py            # standard plots
+├── configs/
+│   └── psa_example.toml    # example PSA spec
 └── tests/
     ├── __init__.py
     ├── test_config.py
@@ -43,7 +46,8 @@ sir/
     ├── test_welfare.py
     ├── test_interventions.py
     ├── test_simulation.py
-    └── test_monte_carlo.py
+    ├── test_monte_carlo.py
+    └── test_psa.py
 ```
 
 Each `src/sir/<module>.py` has one clear responsibility. Tests sit alongside in `tests/test_<module>.py`. Imports flow only "upward" (e.g., `simulation.py` may import `transmission`, `disease`, `foc`, `welfare`, `interventions`; none of those import `simulation`).
@@ -2312,7 +2316,571 @@ git commit -m "feat: add Monte Carlo driver with optional parallelism"
 
 ---
 
-## Task 12: Standard plots
+## Task 12: PSA — probabilistic sensitivity analysis
+
+**Files:**
+- Create: `src/sir/psa.py`
+- Create: `configs/psa_example.toml`
+- Test: `tests/test_psa.py`
+
+- [ ] **Step 1: Create configs directory**
+
+```bash
+mkdir -p /Users/hom/Documents/GitHub/sir/configs
+```
+
+- [ ] **Step 2: Write the example PSA spec**
+
+Path: `/Users/hom/Documents/GitHub/sir/configs/psa_example.toml`
+
+```toml
+# Example PSA spec for the SIR microfoundations ABM.
+# Each table key is a parameter path. Path syntax:
+#   - "gamma"                       (scalar attribute)
+#   - "V_a.60+"                     (tuple element identified by age-bin label)
+#   - "group_p_baseline.HOUSEHOLD"  (mapping element by GroupType name)
+
+[gamma]
+dist = "lognormal"
+mu = -1.946
+sigma = 0.15
+
+[kappa]
+dist = "uniform"
+lo = 0.5
+hi = 2.0
+
+[v_eff]
+dist = "beta"
+a = 16
+b = 4
+
+[c_vax]
+ci95 = [0.005, 0.020]
+
+[sick_attendance_multiplier]
+ci95 = [0.1, 0.5]
+family = "beta"
+
+["V_a.60+"]
+dist = "lognormal"
+mu = 3.40
+sigma = 0.5
+
+["V_a.20-29"]
+dist = "fixed"
+value = 1.0
+
+["group_p_baseline.HOUSEHOLD"]
+ci95 = [0.03, 0.07]
+
+["group_p_baseline.COMMUNITY"]
+ci95 = [0.0005, 0.002]
+family = "lognormal"
+
+["group_alpha.WORKPLACE"]
+dist = "triangular"
+lo = 1.5
+mode = 2.0
+hi = 2.5
+```
+
+- [ ] **Step 3: Write the failing test**
+
+Path: `/Users/hom/Documents/GitHub/sir/tests/test_psa.py`
+
+```python
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from sir.config import default_config
+from sir.constants import AGE_BIN_LABELS, GroupType
+from sir.psa import (
+    ParameterDistribution,
+    PSAResult,
+    apply_sample,
+    ci_to_distribution,
+    draw_sample,
+    load_psa_spec,
+    run_psa,
+)
+
+
+def test_fixed_distribution_returns_value():
+    d = ParameterDistribution("gamma", "fixed", {"value": 0.2})
+    rng = np.random.default_rng(0)
+    assert d.sample(rng) == 0.2
+
+
+def test_normal_distribution_centered_correctly():
+    d = ParameterDistribution("x", "normal", {"mean": 5.0, "sd": 0.0})
+    rng = np.random.default_rng(0)
+    assert d.sample(rng) == 5.0
+
+
+def test_uniform_distribution_in_bounds():
+    d = ParameterDistribution("x", "uniform", {"lo": 0.0, "hi": 1.0})
+    rng = np.random.default_rng(0)
+    for _ in range(100):
+        assert 0.0 <= d.sample(rng) <= 1.0
+
+
+def test_beta_distribution_in_unit_interval():
+    d = ParameterDistribution("x", "beta", {"a": 2.0, "b": 5.0})
+    rng = np.random.default_rng(0)
+    for _ in range(100):
+        v = d.sample(rng)
+        assert 0.0 <= v <= 1.0
+
+
+def test_lognormal_strictly_positive():
+    d = ParameterDistribution("x", "lognormal", {"mu": 0.0, "sigma": 1.0})
+    rng = np.random.default_rng(0)
+    for _ in range(100):
+        assert d.sample(rng) > 0.0
+
+
+def test_triangular_within_bounds():
+    d = ParameterDistribution("x", "triangular", {"lo": 1.0, "mode": 2.0, "hi": 3.0})
+    rng = np.random.default_rng(0)
+    for _ in range(100):
+        v = d.sample(rng)
+        assert 1.0 <= v <= 3.0
+
+
+def test_unknown_distribution_raises():
+    d = ParameterDistribution("x", "weibull", {"a": 1.0})
+    rng = np.random.default_rng(0)
+    with pytest.raises(ValueError):
+        d.sample(rng)
+
+
+def test_ci_to_normal_conversion():
+    d = ci_to_distribution("x", [0.0, 10.0], family="normal")
+    assert d.dist == "normal"
+    assert np.isclose(d.params["mean"], 5.0)
+    # 95% CI under normal: half-width = 1.96 * sd
+    assert np.isclose(d.params["sd"], (10.0 - 0.0) / (2 * 1.96))
+
+
+def test_ci_to_lognormal_conversion():
+    d = ci_to_distribution("x", [1.0, 100.0], family="lognormal")
+    assert d.dist == "lognormal"
+    # mu = mean of log-bounds
+    assert np.isclose(d.params["mu"], (np.log(1.0) + np.log(100.0)) / 2)
+
+
+def test_load_psa_spec_parses_example(tmp_path: Path):
+    spec_path = Path(__file__).parent.parent / "configs" / "psa_example.toml"
+    spec = load_psa_spec(spec_path)
+    names = {d.name for d in spec}
+    assert "gamma" in names
+    assert "kappa" in names
+    assert "V_a.60+" in names
+    assert "group_p_baseline.HOUSEHOLD" in names
+    # CI shorthand was converted
+    c_vax = [d for d in spec if d.name == "c_vax"][0]
+    assert c_vax.dist in ("normal", "lognormal", "beta")
+
+
+def test_draw_sample_reproducible_with_same_seed():
+    spec = [
+        ParameterDistribution("gamma", "lognormal", {"mu": -2.0, "sigma": 0.1}),
+        ParameterDistribution("kappa", "uniform", {"lo": 0.5, "hi": 2.0}),
+    ]
+    s1 = draw_sample(spec, np.random.default_rng(42))
+    s2 = draw_sample(spec, np.random.default_rng(42))
+    assert s1 == s2
+
+
+def test_apply_sample_overrides_scalar():
+    base = default_config()
+    sample = {"gamma": 0.25, "kappa": 1.5}
+    new_cfg = apply_sample(base, sample)
+    assert new_cfg.gamma == 0.25
+    assert new_cfg.kappa == 1.5
+    # Untouched parameters preserved
+    assert new_cfg.v_eff == base.v_eff
+
+
+def test_apply_sample_overrides_v_a_element():
+    base = default_config()
+    # 60+ is age bin 6, label "60+"
+    sample = {"V_a.60+": 99.0}
+    new_cfg = apply_sample(base, sample)
+    assert new_cfg.V_a[6] == 99.0
+    # Other bins unchanged
+    for i in range(6):
+        assert new_cfg.V_a[i] == base.V_a[i]
+
+
+def test_apply_sample_overrides_group_mapping_element():
+    base = default_config()
+    sample = {"group_p_baseline.HOUSEHOLD": 0.123}
+    new_cfg = apply_sample(base, sample)
+    assert new_cfg.group_p_baseline[GroupType.HOUSEHOLD] == 0.123
+    # Other group types unchanged
+    assert new_cfg.group_p_baseline[GroupType.COMMUNITY] == base.group_p_baseline[GroupType.COMMUNITY]
+
+
+def test_apply_sample_unknown_path_raises():
+    base = default_config()
+    with pytest.raises(KeyError):
+        apply_sample(base, {"nonexistent": 1.0})
+
+
+def test_run_psa_returns_correct_shape():
+    base = default_config()
+    # Make config small for speed
+    base = type(base)(**{**base.__dict__, "N": 500, "T": 30})
+    spec = [
+        ParameterDistribution("gamma", "uniform", {"lo": 0.1, "hi": 0.2}),
+    ]
+    result = run_psa(
+        base, spec, interventions=[],
+        n_psa_samples=3, n_mc_per_sample=2,
+        base_seed=0, initial_infected=5,
+    )
+    assert isinstance(result, PSAResult)
+    assert result.welfare_per_sample.shape == (3,)
+    assert len(result.samples) == 3
+
+
+def test_psa_result_quantiles():
+    res = PSAResult(
+        samples=[{"x": 1.0}, {"x": 2.0}, {"x": 3.0}, {"x": 4.0}, {"x": 5.0}],
+        welfare_per_sample=np.array([10.0, 20.0, 30.0, 40.0, 50.0]),
+        peak_I_per_sample=np.array([100, 200, 300, 400, 500]),
+        cumulative_infections_per_sample=np.array([1000, 2000, 3000, 4000, 5000]),
+        cumulative_60plus_per_sample=np.array([100, 200, 300, 400, 500]),
+        welfare_components_per_sample={"infection_cost": np.array([10.0]*5)},
+    )
+    lo, med, hi = res.welfare_ci(alpha=0.10)
+    assert np.isclose(med, 30.0)
+    assert np.isclose(lo, np.percentile(res.welfare_per_sample, 5))
+    assert np.isclose(hi, np.percentile(res.welfare_per_sample, 95))
+```
+
+- [ ] **Step 4: Run to verify failure**
+
+```bash
+pytest tests/test_psa.py -v
+```
+
+Expected: ImportError on `sir.psa`.
+
+- [ ] **Step 5: Implement the PSA module**
+
+Path: `/Users/hom/Documents/GitHub/sir/src/sir/psa.py`
+
+```python
+"""Probabilistic sensitivity analysis (PSA).
+
+Workflow:
+  1. Load TOML spec -> list[ParameterDistribution]
+  2. For each PSA sample: draw values, apply to base config -> ScenarioConfig
+  3. Run n_mc_per_sample stochastic MC runs at that config
+  4. Aggregate per-sample summaries -> PSAResult with quantile methods
+"""
+
+from __future__ import annotations
+
+import tomllib
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass, field, replace
+from pathlib import Path
+from typing import Iterable
+
+import numpy as np
+
+from sir.config import ScenarioConfig
+from sir.constants import AGE_BIN_LABELS, GroupType
+from sir.interventions import Intervention
+from sir.simulation import simulate
+
+
+# -------- Parameter distributions --------
+
+
+@dataclass
+class ParameterDistribution:
+    name: str
+    dist: str
+    params: dict
+
+    def sample(self, rng: np.random.Generator) -> float:
+        if self.dist == "fixed":
+            return float(self.params["value"])
+        if self.dist == "normal":
+            return float(rng.normal(self.params["mean"], self.params["sd"]))
+        if self.dist == "lognormal":
+            return float(rng.lognormal(self.params["mu"], self.params["sigma"]))
+        if self.dist == "uniform":
+            return float(rng.uniform(self.params["lo"], self.params["hi"]))
+        if self.dist == "beta":
+            return float(rng.beta(self.params["a"], self.params["b"]))
+        if self.dist == "triangular":
+            return float(rng.triangular(self.params["lo"], self.params["mode"], self.params["hi"]))
+        raise ValueError(f"Unknown distribution: {self.dist}")
+
+
+def ci_to_distribution(name: str, ci95: list[float], family: str = "normal") -> ParameterDistribution:
+    """Convert a 95% CI [lo, hi] to a fitted distribution."""
+    lo, hi = ci95
+    if family == "normal":
+        mean = (lo + hi) / 2
+        sd = (hi - lo) / (2 * 1.96)
+        return ParameterDistribution(name, "normal", {"mean": mean, "sd": sd})
+    if family == "lognormal":
+        # Fit so that exp(mu ± 1.96 sigma) = lo, hi
+        mu = (np.log(lo) + np.log(hi)) / 2
+        sigma = (np.log(hi) - np.log(lo)) / (2 * 1.96)
+        return ParameterDistribution(name, "lognormal", {"mu": mu, "sigma": sigma})
+    if family == "beta":
+        # Method of moments: solve for (a, b) given mean and variance
+        mean = (lo + hi) / 2
+        sd = (hi - lo) / (2 * 1.96)
+        var = sd ** 2
+        if var <= 0 or mean <= 0 or mean >= 1:
+            raise ValueError(f"Beta CI infeasible for {name}: lo={lo}, hi={hi}")
+        common = mean * (1 - mean) / var - 1
+        a = mean * common
+        b = (1 - mean) * common
+        return ParameterDistribution(name, "beta", {"a": a, "b": b})
+    raise ValueError(f"Unknown family for CI shorthand: {family}")
+
+
+# -------- Spec loading --------
+
+
+def load_psa_spec(path: Path | str) -> list[ParameterDistribution]:
+    path = Path(path)
+    with open(path, "rb") as f:
+        data = tomllib.load(f)
+    out: list[ParameterDistribution] = []
+    for name, body in data.items():
+        if "ci95" in body:
+            family = body.get("family", "normal")
+            out.append(ci_to_distribution(name, body["ci95"], family))
+        else:
+            dist = body["dist"]
+            params = {k: v for k, v in body.items() if k != "dist"}
+            out.append(ParameterDistribution(name, dist, params))
+    return out
+
+
+# -------- Sampling and application --------
+
+
+def draw_sample(spec: list[ParameterDistribution], rng: np.random.Generator) -> dict[str, float]:
+    return {d.name: d.sample(rng) for d in spec}
+
+
+_AGE_BIN_INDEX = {label: i for i, label in enumerate(AGE_BIN_LABELS)}
+_GROUP_TYPE_INDEX = {gt.name: gt for gt in GroupType}
+
+
+def apply_sample(base: ScenarioConfig, sample: dict[str, float]) -> ScenarioConfig:
+    """Return a new ScenarioConfig with `sample` overrides applied.
+
+    Path syntax:
+      - "gamma"                          -> scalar attribute
+      - "V_a.60+"                        -> tuple element by age-bin label
+      - "group_p_baseline.HOUSEHOLD"     -> mapping element by GroupType name
+    """
+    scalar_overrides: dict[str, float] = {}
+    v_a_list = list(base.V_a)
+    group_alpha = dict(base.group_alpha)
+    group_p = dict(base.group_p_baseline)
+    group_m = dict(base.group_m_bar)
+    v_a_touched = False
+    group_alpha_touched = False
+    group_p_touched = False
+    group_m_touched = False
+
+    for path, value in sample.items():
+        if "." not in path:
+            if not hasattr(base, path):
+                raise KeyError(f"Unknown scalar parameter: {path}")
+            scalar_overrides[path] = value
+            continue
+        parent, child = path.split(".", 1)
+        if parent == "V_a":
+            if child not in _AGE_BIN_INDEX:
+                raise KeyError(f"Unknown age bin: {child}")
+            v_a_list[_AGE_BIN_INDEX[child]] = value
+            v_a_touched = True
+        elif parent == "group_alpha":
+            if child not in _GROUP_TYPE_INDEX:
+                raise KeyError(f"Unknown group type: {child}")
+            group_alpha[_GROUP_TYPE_INDEX[child]] = value
+            group_alpha_touched = True
+        elif parent == "group_p_baseline":
+            if child not in _GROUP_TYPE_INDEX:
+                raise KeyError(f"Unknown group type: {child}")
+            group_p[_GROUP_TYPE_INDEX[child]] = value
+            group_p_touched = True
+        elif parent == "group_m_bar":
+            if child not in _GROUP_TYPE_INDEX:
+                raise KeyError(f"Unknown group type: {child}")
+            group_m[_GROUP_TYPE_INDEX[child]] = value
+            group_m_touched = True
+        else:
+            raise KeyError(f"Unknown parameter path: {path}")
+
+    kwargs: dict = dict(scalar_overrides)
+    if v_a_touched:
+        kwargs["V_a"] = tuple(v_a_list)
+    if group_alpha_touched:
+        kwargs["group_alpha"] = group_alpha
+    if group_p_touched:
+        kwargs["group_p_baseline"] = group_p
+    if group_m_touched:
+        kwargs["group_m_bar"] = group_m
+    return replace(base, **kwargs)
+
+
+# -------- PSA runner --------
+
+
+@dataclass
+class PSAResult:
+    samples: list[dict[str, float]]
+    welfare_per_sample: np.ndarray
+    peak_I_per_sample: np.ndarray
+    cumulative_infections_per_sample: np.ndarray
+    cumulative_60plus_per_sample: np.ndarray
+    welfare_components_per_sample: dict[str, np.ndarray]
+
+    def welfare_ci(self, alpha: float = 0.05) -> tuple[float, float, float]:
+        lo = float(np.percentile(self.welfare_per_sample, 100 * alpha / 2))
+        med = float(np.percentile(self.welfare_per_sample, 50))
+        hi = float(np.percentile(self.welfare_per_sample, 100 * (1 - alpha / 2)))
+        return lo, med, hi
+
+    def parameter_correlations(self, outcome: np.ndarray) -> dict[str, float]:
+        """Spearman-like rank correlation of each parameter with an outcome array."""
+        if not self.samples:
+            return {}
+        param_names = list(self.samples[0].keys())
+        from scipy.stats import spearmanr
+        out: dict[str, float] = {}
+        for p in param_names:
+            vals = np.array([s[p] for s in self.samples])
+            if vals.std() == 0:
+                out[p] = 0.0
+            else:
+                rho, _ = spearmanr(vals, outcome)
+                out[p] = float(rho)
+        return out
+
+
+def _summarize_run(
+    cfg: ScenarioConfig,
+    interventions: list[Intervention],
+    n_mc: int,
+    seed: int,
+    initial_infected: int,
+) -> dict:
+    """Run n_mc stochastic simulations at cfg; return mean summary."""
+    welfare_list = []
+    peak_I_list = []
+    cum_inf_list = []
+    cum_60_list = []
+    components_acc: dict[str, list[float]] = {}
+    for k in range(n_mc):
+        rng = np.random.default_rng(seed * 1000 + k)
+        result = simulate(cfg, interventions, rng, initial_infected=initial_infected)
+        welfare_list.append(result.welfare.total_welfare())
+        peak_I_list.append(int(result.I_history.max()))
+        cum_inf = int(result.R_history[-1] + result.V_history[-1] - result.V_history[0])
+        cum_inf_list.append(cum_inf)
+        # Cumulative 60+ infections: count agents in age_bin 6 who are R at end
+        ages = result.final_world.age_bin
+        is_60plus = ages == 6
+        was_infected = (result.final_world.state[is_60plus] == 3) | (result.final_world.state[is_60plus] == 1)
+        cum_60_list.append(int(was_infected.sum()))
+        for ck, cv in result.welfare.totals.items():
+            components_acc.setdefault(ck, []).append(cv)
+    return {
+        "welfare": float(np.mean(welfare_list)),
+        "peak_I": float(np.mean(peak_I_list)),
+        "cum_inf": float(np.mean(cum_inf_list)),
+        "cum_60": float(np.mean(cum_60_list)),
+        "components": {k: float(np.mean(v)) for k, v in components_acc.items()},
+    }
+
+
+def _outer_iteration(args: tuple) -> tuple[dict[str, float], dict]:
+    base_cfg, spec, interventions, n_mc, seed, initial_infected = args
+    rng = np.random.default_rng(seed)
+    sample = draw_sample(spec, rng)
+    cfg = apply_sample(base_cfg, sample)
+    summary = _summarize_run(cfg, interventions, n_mc, seed, initial_infected)
+    return sample, summary
+
+
+def run_psa(
+    base_cfg: ScenarioConfig,
+    spec: list[ParameterDistribution],
+    interventions: Iterable[Intervention],
+    n_psa_samples: int,
+    n_mc_per_sample: int,
+    base_seed: int = 0,
+    initial_infected: int = 10,
+    parallel: bool = True,
+) -> PSAResult:
+    interventions_list = list(interventions)
+    args_list = [
+        (base_cfg, spec, interventions_list, n_mc_per_sample, base_seed + i, initial_infected)
+        for i in range(n_psa_samples)
+    ]
+    if parallel and n_psa_samples > 1:
+        with ProcessPoolExecutor() as pool:
+            outputs = list(pool.map(_outer_iteration, args_list))
+    else:
+        outputs = [_outer_iteration(a) for a in args_list]
+
+    samples = [o[0] for o in outputs]
+    welfare = np.array([o[1]["welfare"] for o in outputs])
+    peak_I = np.array([o[1]["peak_I"] for o in outputs])
+    cum_inf = np.array([o[1]["cum_inf"] for o in outputs])
+    cum_60 = np.array([o[1]["cum_60"] for o in outputs])
+    component_keys = list(outputs[0][1]["components"].keys())
+    components = {
+        k: np.array([o[1]["components"][k] for o in outputs])
+        for k in component_keys
+    }
+    return PSAResult(
+        samples=samples,
+        welfare_per_sample=welfare,
+        peak_I_per_sample=peak_I,
+        cumulative_infections_per_sample=cum_inf,
+        cumulative_60plus_per_sample=cum_60,
+        welfare_components_per_sample=components,
+    )
+```
+
+- [ ] **Step 6: Run to verify pass**
+
+```bash
+pytest tests/test_psa.py -v
+```
+
+Expected: all 16 tests pass. The end-to-end PSA run uses a small config (N=500, T=30) so it should complete in <30 seconds.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/sir/psa.py tests/test_psa.py configs/psa_example.toml
+git commit -m "feat: add probabilistic sensitivity analysis with TOML spec"
+```
+
+---
+
+## Task 13: Standard plots
 
 **Files:**
 - Create: `src/sir/plots.py`
@@ -2440,11 +3008,12 @@ git commit -m "feat: add standard plots for epidemic curves and welfare decompos
 
 ---
 
-## Task 13: Demonstration scripts (baseline + comparison)
+## Task 14: Demonstration scripts (baseline, comparison, PSA)
 
 **Files:**
 - Create: `scripts/run_baseline.py`
 - Create: `scripts/run_comparison.py`
+- Create: `scripts/run_psa.py`
 
 - [ ] **Step 1: Create scripts directory**
 
@@ -2615,16 +3184,127 @@ Expected behavior:
 - Vaccination scenario should have notably lower infection cost than baseline.
 - Mask mandate should reduce peak infected vs. baseline.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Write the PSA runner script**
+
+Path: `/Users/hom/Documents/GitHub/sir/scripts/run_psa.py`
+
+```python
+"""Run probabilistic sensitivity analysis using configs/psa_example.toml.
+
+Outputs a summary of welfare CIs and a tornado plot of parameter sensitivities.
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+
+from sir.config import default_config
+from sir.psa import load_psa_spec, run_psa
+
+
+def plot_tornado(
+    correlations: dict[str, float],
+    outcome_name: str,
+    out_path: Path,
+) -> None:
+    items = sorted(correlations.items(), key=lambda kv: abs(kv[1]), reverse=True)
+    names = [k for k, _ in items]
+    values = [v for _, v in items]
+    fig, ax = plt.subplots(figsize=(8, max(3, 0.3 * len(names) + 1)))
+    colors = ["tab:red" if v < 0 else "tab:blue" for v in values]
+    ax.barh(range(len(names)), values, color=colors)
+    ax.set_yticks(range(len(names)))
+    ax.set_yticklabels(names, fontsize=8)
+    ax.set_xlabel(f"Rank correlation with {outcome_name}")
+    ax.set_title(f"Parameter sensitivity tornado: {outcome_name}")
+    ax.axvline(0, color="black", linewidth=0.8)
+    ax.grid(True, alpha=0.3, axis="x")
+    ax.invert_yaxis()
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+
+
+def main() -> None:
+    base_cfg = default_config()
+    spec_path = Path(__file__).parent.parent / "configs" / "psa_example.toml"
+    spec = load_psa_spec(spec_path)
+    print(f"Loaded {len(spec)} parameter distributions from {spec_path.name}")
+
+    n_psa = 30
+    n_mc = 5
+    print(f"Running PSA: {n_psa} samples x {n_mc} MC runs = {n_psa * n_mc} simulations")
+    result = run_psa(
+        base_cfg, spec,
+        interventions=[],
+        n_psa_samples=n_psa,
+        n_mc_per_sample=n_mc,
+        base_seed=0,
+        initial_infected=10,
+    )
+
+    lo, med, hi = result.welfare_ci(alpha=0.05)
+    print(f"Total welfare: median {med:.1f}, 95% CI [{lo:.1f}, {hi:.1f}]")
+    peak_med = float(np.median(result.peak_I_per_sample))
+    peak_lo = float(np.percentile(result.peak_I_per_sample, 2.5))
+    peak_hi = float(np.percentile(result.peak_I_per_sample, 97.5))
+    print(f"Peak infected: median {peak_med:.0f}, 95% CI [{peak_lo:.0f}, {peak_hi:.0f}]")
+    cum_med = float(np.median(result.cumulative_infections_per_sample))
+    print(f"Cumulative infections (median): {cum_med:.0f}")
+
+    out_dir = Path(__file__).parent.parent / "output"
+    out_dir.mkdir(exist_ok=True)
+    welfare_corr = result.parameter_correlations(result.welfare_per_sample)
+    plot_tornado(welfare_corr, "total welfare", out_dir / "psa_tornado_welfare.png")
+    peak_corr = result.parameter_correlations(result.peak_I_per_sample)
+    plot_tornado(peak_corr, "peak infected", out_dir / "psa_tornado_peak.png")
+    print(f"Saved tornado plots to {out_dir}")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- [ ] **Step 7: Run PSA script and verify**
 
 ```bash
-git add scripts/run_baseline.py scripts/run_comparison.py
-git commit -m "feat: add baseline and comparison scenario scripts"
+cd /Users/hom/Documents/GitHub/sir
+python scripts/run_psa.py
+```
+
+Expected output (approximate):
+
+```
+Loaded ~10 parameter distributions from psa_example.toml
+Running PSA: 30 samples x 5 MC runs = 150 simulations
+Total welfare: median <num>, 95% CI [<lo>, <hi>]
+Peak infected: median <num>, 95% CI [<lo>, <hi>]
+Cumulative infections (median): <num>
+Saved tornado plots to /Users/hom/Documents/GitHub/sir/output
+```
+
+Inspect `output/psa_tornado_welfare.png` and confirm:
+- High-leverage parameters at the top (longest bars).
+- Sign of correlation makes sense (e.g., higher `V_a.60+` should correlate *negatively* with welfare).
+
+Total runtime should be ~3–10 minutes depending on parallelism.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add scripts/run_baseline.py scripts/run_comparison.py scripts/run_psa.py
+git commit -m "feat: add baseline, comparison, and PSA scenario scripts"
 ```
 
 ---
 
-## Task 14: Final sanity sweep
+## Task 15: Final sanity sweep
 
 **Files:**
 - (No new files. Run all tests + scenario scripts together.)
@@ -2643,6 +3323,7 @@ Expected: all tests pass. Total runtime <2 minutes.
 ```bash
 python scripts/run_baseline.py
 python scripts/run_comparison.py
+python scripts/run_psa.py
 ```
 
 Expected: both complete without errors; output PNGs are created.
@@ -2661,7 +3342,7 @@ git tag v0.1
 git log --oneline
 ```
 
-Expected: clean linear history of feature commits, ~14 commits.
+Expected: clean linear history of feature commits, ~15 commits.
 
 ---
 
@@ -2687,6 +3368,7 @@ Spec coverage check (against `docs/superpowers/specs/2026-05-14-sir-microfoundat
 | 7 Parameters | Task 3 (default_config) |
 | 8 Intervention layer | Task 9 |
 | 9 Welfare | Task 8 |
+| 9.5 PSA | Task 12 |
 | 10 Module structure | All; matches layout exactly |
 | 11 Implementation notes | Tasks 4, 6 (numpy/bincount throughout) |
 | 12 Verification | Tasks 5, 6, 7, 8, 9, 10 (all tests) |

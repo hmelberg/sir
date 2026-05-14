@@ -29,6 +29,7 @@ The model is a methodology demonstration first, a calibrated forecast second. It
 - Welfare accounting in utility units, decomposed by source (work, leisure, illness, precaution, policy spillover).
 - Vaccination as an **exogenous policy intervention** (no endogenous vaccine-choice optimization).
 - **Spillover costs** of interventions (e.g., learning loss from school closure) modeled as parametric add-ons to the intervention's direct cost.
+- **Probabilistic sensitivity analysis** (PSA): a TOML spec of parameter distributions, outer-loop sampling, inner Monte Carlo per draw, and confidence intervals on outcomes.
 
 ### Out of scope (v1; potential v2 extensions)
 
@@ -367,6 +368,86 @@ Report by:
 
 This decomposition is what makes the model **policy-relevant**: a reader can see precisely which channel drives the welfare comparison between two intervention scenarios.
 
+## 9.5 Probabilistic Sensitivity Analysis (PSA)
+
+PSA propagates parameter uncertainty to outcome uncertainty. Each uncertain parameter is given a distribution; we draw `n_psa` joint samples, run `n_mc` stochastic simulations per draw, and report confidence intervals across draws.
+
+### 9.5.1 File format (TOML)
+
+A PSA spec is a TOML file mapping **parameter paths** to distribution specifications. Two forms are supported per path:
+
+**Form A — explicit distribution:**
+
+```toml
+[gamma]
+dist = "lognormal"
+mu = -1.946
+sigma = 0.15
+
+["V_a.60+"]
+dist = "lognormal"
+mu = 3.40
+sigma = 0.5
+```
+
+**Form B — CI shorthand:**
+
+```toml
+[c_vax]
+ci95 = [0.005, 0.020]              # default family: normal
+
+["group_p_baseline.COMMUNITY"]
+ci95 = [0.0005, 0.002]
+family = "lognormal"               # override default
+```
+
+**Form C — fixed (no uncertainty, useful for locking parameters):**
+
+```toml
+[kappa]
+dist = "fixed"
+value = 1.0
+```
+
+### 9.5.2 Supported distributions
+
+| Name | Params | Typical use |
+|---|---|---|
+| `fixed` | `value` | Lock a parameter |
+| `normal` | `mean`, `sd` | Unbounded symmetric uncertainty |
+| `lognormal` | `mu`, `sigma` (of log) | Strictly-positive parameters |
+| `uniform` | `lo`, `hi` | Bounded uniform |
+| `beta` | `a`, `b` | Probabilities in [0,1] |
+| `triangular` | `lo`, `mode`, `hi` | Point estimate + range |
+
+### 9.5.3 Parameter paths
+
+- **Scalars**: `gamma`, `kappa`, `v_eff`, `c_vax`, `sick_attendance_multiplier`, `learning_loss_per_kid_per_day`
+- **V_a tuple elements**: `V_a.0-9`, `V_a.10-19`, ..., `V_a.60+`
+- **Mapping elements**: `group_alpha.HOUSEHOLD`, `group_p_baseline.SCHOOL`, `group_m_bar.WORKPLACE`, etc.
+
+Structural parameters (`N`, `T`, group counts, voluntary-group set) are not exposed for PSA.
+
+### 9.5.4 Sampling model
+
+Draws are **independent across parameters** in v1. (Correlations are a v2 extension.) Each PSA outer iteration draws all parameter values once; the resulting `ScenarioConfig` is then passed through `n_mc` MC runs that vary only the RNG seed.
+
+### 9.5.5 Outputs and reporting
+
+`PSAResult` stores, per outer sample:
+
+- Mean total welfare (averaged over inner MC)
+- Mean peak `I`
+- Mean cumulative infections
+- Mean cumulative 60+ infections (mortality proxy)
+- Mean welfare components
+
+Aggregated across samples, the report shows median, 95% CI (2.5/97.5 percentiles), and **tornado-style marginal sensitivity** (rank correlation between each parameter draw and an outcome).
+
+### 9.5.6 Run budget
+
+Default: `n_psa = 50`, `n_mc = 10` → 500 simulations. ~5 minutes on 8 cores in parallel.
+
 ## 10. Module structure
 
 ```
@@ -385,13 +466,15 @@ sir/
     ├── welfare.py            # utility computation + aggregation
     ├── simulation.py         # daily loop, orchestrates the above
     ├── monte_carlo.py        # parallel runs + summary stats
+    ├── psa.py                # PSA: load TOML, sample, apply, run, aggregate
     └── plots.py              # standard outputs (curves, welfare bars, dist'l plots)
 └── tests/
     ├── test_foc.py           # FOC reduces to known limits (no risk → θ=1, e=0; high V → θ small, e large)
     ├── test_transmission.py  # well-mixed group reproduces SIR ODE in deterministic limit
     ├── test_disease.py       # R₀ at I₀=1 in fully susceptible matches m·p/γ
     ├── test_welfare.py       # zero infections + zero precaution → max welfare
-    └── test_interventions.py # each intervention has expected sign on welfare components
+    ├── test_interventions.py # each intervention has expected sign on welfare components
+    └── test_psa.py           # distribution sampling, path overrides, end-to-end PSA run
 ```
 
 ### 10.1 Key interfaces
