@@ -922,6 +922,59 @@
 
       <section class="results">
 
+        <div class="plot-card">
+          <div class="plot-card-header">
+            <h4 id="plot-main-title">Outcome over time — with vs. without interventions</h4>
+            <div class="outcome-selector">
+              <label for="ctl-outcome">Show</label>
+              <select id="ctl-outcome" class="select" style="width: auto;">
+                <optgroup label="Disease">
+                  <option value="I">Infected (current)</option>
+                  <option value="new_inf">New infections per day</option>
+                  <option value="R">Cumulative infections</option>
+                  <option value="S">Susceptible remaining</option>
+                </optgroup>
+                <optgroup label="Hospital">
+                  <option value="hosp_prev">Hospital occupancy (beds in use)</option>
+                  <option value="hosp_admit">Hospital admissions per day</option>
+                </optgroup>
+                <optgroup label="ICU">
+                  <option value="icu_prev">ICU occupancy (beds in use)</option>
+                  <option value="icu_admit">ICU admissions per day</option>
+                </optgroup>
+              </select>
+            </div>
+          </div>
+          <div id="plot-main" class="plot"></div>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-label">$R_0$ (no behavior)</div>
+            <div class="summary-value" id="sum-r0">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Peak infected</div>
+            <div class="summary-value compare" id="sum-peak">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Final attack rate</div>
+            <div class="summary-value compare" id="sum-attack">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Peak hospital occupancy</div>
+            <div class="summary-value compare" id="sum-hosp">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Peak ICU occupancy</div>
+            <div class="summary-value compare" id="sum-icu">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Net welfare</div>
+            <div class="summary-value compare" id="sum-welfare">—</div>
+          </div>
+        </div>
+
         <div class="intervention-panel">
           <div class="intervention-grid">
             <div class="intervention-col">
@@ -1009,64 +1062,6 @@
               <div class="effect-readout" id="cint-readout">Removes <strong>—</strong> meetings/day → effective m₀ drops by <strong>—</strong></div>
             </div>
           </div>
-        </div>
-
-        <div class="summary-grid">
-          <div class="summary-card">
-            <div class="summary-label">$R_0$ (no behavior)</div>
-            <div class="summary-value" id="sum-r0">—</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-label">Peak infected</div>
-            <div class="summary-value compare" id="sum-peak">—</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-label">Final attack rate</div>
-            <div class="summary-value compare" id="sum-attack">—</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-label">Peak hospital occupancy</div>
-            <div class="summary-value compare" id="sum-hosp">—</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-label">Peak ICU occupancy</div>
-            <div class="summary-value compare" id="sum-icu">—</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-label">Net welfare</div>
-            <div class="summary-value compare" id="sum-welfare">—</div>
-          </div>
-        </div>
-
-        <div class="plot-card">
-          <div class="plot-card-header">
-            <h4 id="plot-main-title">Outcome over time — with vs. without interventions</h4>
-            <div class="outcome-selector">
-              <label for="ctl-outcome">Show</label>
-              <select id="ctl-outcome" class="select" style="width: auto;">
-                <optgroup label="Disease">
-                  <option value="I">Infected (current)</option>
-                  <option value="new_inf">New infections per day</option>
-                  <option value="R">Cumulative infections</option>
-                  <option value="S">Susceptible remaining</option>
-                </optgroup>
-                <optgroup label="Hospital">
-                  <option value="hosp_prev">Hospital occupancy (beds in use)</option>
-                  <option value="hosp_admit">Hospital admissions per day</option>
-                </optgroup>
-                <optgroup label="ICU">
-                  <option value="icu_prev">ICU occupancy (beds in use)</option>
-                  <option value="icu_admit">ICU admissions per day</option>
-                </optgroup>
-              </select>
-            </div>
-          </div>
-          <div id="plot-main" class="plot"></div>
-        </div>
-
-        <div class="plot-card">
-          <h4>Behavioral response over time</h4>
-          <div id="plot-behavior" class="plot plot-small"></div>
         </div>
       </section>
     </div>
@@ -1552,7 +1547,6 @@ json.dumps(r)
       lastResult = data;
       lastInp = inp;
       renderMainPlot();
-      renderBehaviorPlot(data, inp);
       renderSummary(data, inp);
     }
 
@@ -1604,27 +1598,6 @@ json.dumps(r)
         hasIntervention
           ? `${meta.label} — with vs. without selected interventions`
           : `${meta.label} — baseline (turn on an intervention to see the comparison)`;
-    }
-
-    function renderBehaviorPlot(data, inp) {
-      const w = data.with_int;
-      const days = Array.from({ length: w.theta.length }, (_, i) => i);
-      const traces = [
-        { x: days, y: w.theta, name: 'θ (attendance multiplier)',
-          line: { color: getCSSVar('--theta-color'), width: 2 } },
-        { x: days, y: w.e, name: 'e (precaution effort)',
-          line: { color: getCSSVar('--e-color'), width: 2 } },
-      ];
-      const layout = {
-        margin: { l: 50, r: 20, t: 10, b: 40 },
-        xaxis: { title: 'Day', gridcolor: '#f0f0f0' },
-        yaxis: { title: 'Choice variable [0,1]', range: [0, 1.05], gridcolor: '#f0f0f0' },
-        legend: { orientation: 'h', y: 1.15 },
-        font: { family: 'Inter, sans-serif', size: 12 },
-        paper_bgcolor: 'white', plot_bgcolor: 'white',
-        shapes: bandsForInp(inp),
-      };
-      Plotly.react('plot-behavior', traces, layout, { responsive: true, displayModeBar: false });
     }
 
     function setCompareCard(id, withVal, withoutVal, formatter, betterIsLower = true) {
