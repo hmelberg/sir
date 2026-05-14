@@ -200,6 +200,28 @@ def compute_yll(
     return float(discounted.sum()), discounted
 
 
+def compute_morbidity_qaly(
+    new_inf_by_age: np.ndarray,
+    hosp_rate_by_age: tuple[float, ...],
+    icu_rate_by_age: tuple[float, ...],
+    cfg: CBAConfig,
+    discount_rate: float,
+) -> tuple[float, np.ndarray]:
+    """Stream 6: Acute morbidity QALY loss."""
+    T = new_inf_by_age.shape[0]
+    hr = np.asarray(hosp_rate_by_age, dtype=np.float64)
+    ir = np.asarray(icu_rate_by_age, dtype=np.float64)
+    qaly_per_case = (
+        cfg.disability_weight_symptomatic * cfg.sick_days_per_infection / 365.0
+        + hr * cfg.disability_weight_hospitalized * cfg.sick_days_hospitalized / 365.0
+        + ir * cfg.disability_weight_icu * cfg.sick_days_icu / 365.0
+    )
+    raw = new_inf_by_age @ qaly_per_case
+    factors = discount_factors(discount_rate, T)
+    discounted = raw * factors
+    return float(discounted.sum()), discounted
+
+
 @dataclass
 class CBAReport:
     streams: dict[str, float]

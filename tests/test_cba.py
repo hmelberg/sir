@@ -266,3 +266,27 @@ def test_yll_discounted_pv_form():
     total, _ = compute_yll(daily_deaths_by_age, yll_per_age, discount_rate=0.03)
     expected = (1 - np.exp(-20 * 0.03)) / 0.03
     assert np.isclose(total, expected, rtol=1e-3)
+
+
+from sir.cba import compute_morbidity_qaly
+
+
+def test_morbidity_qaly_zero_when_no_infections():
+    new_inf_by_age = np.zeros((10, 7))
+    hc_rates = (0.0,) * 7
+    icu_rates = (0.0,) * 7
+    cfg = default_cba_config()
+    total, _ = compute_morbidity_qaly(new_inf_by_age, hc_rates, icu_rates, cfg, discount_rate=0.0)
+    assert total == 0.0
+
+
+def test_morbidity_qaly_uses_disability_weights():
+    new_inf_by_age = np.zeros((2, 7))
+    new_inf_by_age[0, 3] = 100
+    hc_rates = (0.0,) * 7
+    icu_rates = (0.0,) * 7
+    cfg = default_cba_config()
+    # 100 × 0.15 × 7 / 365
+    total, _ = compute_morbidity_qaly(new_inf_by_age, hc_rates, icu_rates, cfg, discount_rate=0.0)
+    expected = 100 * 0.15 * 7 / 365
+    assert np.isclose(total, expected, rtol=1e-3)
