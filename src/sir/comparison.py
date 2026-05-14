@@ -7,7 +7,7 @@ intervention-parameter uncertainty via PSA over distributions.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import numpy as np
 
@@ -16,6 +16,7 @@ from sir.constants import GroupType
 from sir.healthcare import HealthcareConfig, HealthcareOutcomes
 from sir.interventions import Intervention
 from sir.monte_carlo import MCResult, run_mc
+from sir.psa import ParameterDistribution
 
 
 @dataclass
@@ -29,17 +30,60 @@ class ComparisonResult:
     intervention_samples: list[dict[str, float]] | None
 
 
+@dataclass
+class UncertainIntervention:
+    """A symbolic intervention spec with ParameterDistribution-valued parameters.
+
+    Resolved into a concrete Intervention by `resolve(rng)`.
+    """
+    name: str
+    builder: Callable[[dict], Intervention]
+    params: dict[str, Any]  # each value is float or ParameterDistribution
+
+    def resolve(self, rng: np.random.Generator) -> tuple[Intervention, dict[str, float]]:
+        resolved = {}
+        for k, v in self.params.items():
+            if isinstance(v, ParameterDistribution):
+                resolved[k] = v.sample(rng)
+            else:
+                resolved[k] = v
+        sampled_only = {
+            f"{self.name}.{k}": v
+            for k, v in resolved.items()
+            if isinstance(self.params[k], ParameterDistribution)
+        }
+        return self.builder(resolved), sampled_only
+
+
+# ---------------- transmission_reduction ----------------
+
 def transmission_reduction(
-    p_factor: float,
+    p_factor,
     window: tuple[int, int],
     targets: set[GroupType] | None = None,
     direct_cost_per_day: float = 0.0,
-) -> Intervention:
-    """Reduce per-meeting transmission by factor `p_factor` during the window.
+):
+    """Reduce per-meeting transmission by `p_factor` during the window.
 
-    If `targets` is None, applies to all group types. Otherwise, only the
-    specified types (e.g., {SCHOOL, WORKPLACE, COMMUNITY} for masks indoors).
+    Returns Intervention if p_factor is a float, or UncertainIntervention if
+    p_factor is a ParameterDistribution.
     """
+    if isinstance(p_factor, ParameterDistribution):
+        params = {"p_factor": p_factor}
+
+        def builder(resolved):
+            return _build_transmission_reduction(
+                resolved["p_factor"], window, targets, direct_cost_per_day,
+            )
+
+        return UncertainIntervention(name="transmission_reduction", builder=builder, params=params)
+    return _build_transmission_reduction(p_factor, window, targets, direct_cost_per_day)
+
+
+def _build_transmission_reduction(
+    p_factor: float, window: tuple[int, int],
+    targets: set[GroupType] | None, direct_cost_per_day: float,
+) -> Intervention:
     if targets is None:
         target_ints = np.array([int(gt) for gt in GroupType])
     else:
@@ -61,23 +105,53 @@ def transmission_reduction(
     )
 
 
+# ---------------- contact_reduction ----------------
+
 def contact_reduction(
-    people: float,
-    events_per_week: float,
-    encounters_per_event: float,
+    people,
+    events_per_week,
+    encounters_per_event,
     window: tuple[int, int],
     target: GroupType | None = None,
     spillover_cost_per_person_per_day: float = 0.0,
-) -> Intervention:
-    """X*Y*Z formulation of a contact-reduction intervention.
+):
+    """X·Y·Z contact-reduction intervention.
 
-    Removes (people * events_per_week * encounters_per_event) / 7 person-meetings
-    per day from the population pool. If `target` is None, applies the reduction
-    as a uniform multiplier across all groups. If `target` is a GroupType, only
-    that group type is affected.
+    Any of people/events_per_week/encounters_per_event may be a
+    ParameterDistribution. Returns Intervention if all are floats,
+    UncertainIntervention otherwise.
     """
-    meetings_per_day = people * events_per_week * encounters_per_event / 7.0
+    has_dist = any(
+        isinstance(v, ParameterDistribution)
+        for v in (people, events_per_week, encounters_per_event)
+    )
+    if has_dist:
+        params = {
+            "people": people,
+            "events_per_week": events_per_week,
+            "encounters_per_event": encounters_per_event,
+        }
 
+        def builder(resolved):
+            return _build_contact_reduction(
+                resolved["people"], resolved["events_per_week"],
+                resolved["encounters_per_event"], window, target,
+                spillover_cost_per_person_per_day,
+            )
+
+        return UncertainIntervention(name="contact_reduction", builder=builder, params=params)
+    return _build_contact_reduction(
+        people, events_per_week, encounters_per_event,
+        window, target, spillover_cost_per_person_per_day,
+    )
+
+
+def _build_contact_reduction(
+    people: float, events_per_week: float, encounters_per_event: float,
+    window: tuple[int, int], target: GroupType | None,
+    spillover_cost_per_person_per_day: float,
+) -> Intervention:
+    meetings_per_day = people * events_per_week * encounters_per_event / 7.0
     if target is None:
         target_ints = np.array([int(gt) for gt in GroupType])
     else:
@@ -110,9 +184,11 @@ def contact_reduction(
     )
 
 
+# ---------------- run_comparison ----------------
+
 def run_comparison(
     cfg: ScenarioConfig,
-    interventions: Sequence[Intervention],
+    interventions: Sequence,  # list of Intervention | UncertainIntervention
     n_runs: int,
     n_psa_samples: int = 1,
     base_seed: int = 0,
@@ -120,32 +196,62 @@ def run_comparison(
     healthcare: HealthcareConfig | None = None,
     parallel: bool = True,
 ) -> ComparisonResult:
-    """Run baseline vs treatment, with optional PSA over uncertain intervention parameters.
-
-    For now (Task 9), treats all interventions as concrete (no uncertainty handling).
-    """
+    """Run baseline vs treatment, with optional PSA over uncertain intervention parameters."""
     interventions_list = list(interventions)
+    has_uncertainty = any(isinstance(i, UncertainIntervention) for i in interventions_list)
 
-    baseline_mc = run_mc(
-        cfg, interventions=[], n_runs=n_runs, base_seed=base_seed,
-        initial_infected=initial_infected, parallel=parallel,
-        healthcare=healthcare,
-    )
-    treatment_mc = run_mc(
-        cfg, interventions=interventions_list, n_runs=n_runs, base_seed=base_seed,
-        initial_infected=initial_infected, parallel=parallel,
-        healthcare=healthcare,
-    )
+    if not has_uncertainty:
+        n_psa_samples = 1
+        resolved_list = [interventions_list]
+        samples_list = None
+    else:
+        master_rng = np.random.default_rng(base_seed)
+        resolved_list = []
+        samples_list = []
+        for _psa_idx in range(n_psa_samples):
+            sub_seed = int(master_rng.integers(0, 2**31 - 1))
+            sub_rng = np.random.default_rng(sub_seed)
+            resolved_interventions = []
+            sample_dict = {}
+            for inter in interventions_list:
+                if isinstance(inter, UncertainIntervention):
+                    concrete, sampled = inter.resolve(sub_rng)
+                    resolved_interventions.append(concrete)
+                    sample_dict.update(sampled)
+                else:
+                    resolved_interventions.append(inter)
+            resolved_list.append(resolved_interventions)
+            samples_list.append(sample_dict)
 
-    baseline_hc = [baseline_mc.healthcare_outcomes] if healthcare is not None else None
-    treatment_hc = [treatment_mc.healthcare_outcomes] if healthcare is not None else None
+    baseline_results = []
+    treatment_results = []
+    baseline_hc = [] if healthcare is not None else None
+    treatment_hc = [] if healthcare is not None else None
+
+    for psa_idx, resolved in enumerate(resolved_list):
+        seed_offset = base_seed + psa_idx * n_runs * 2
+        baseline_mc = run_mc(
+            cfg, interventions=[], n_runs=n_runs, base_seed=seed_offset,
+            initial_infected=initial_infected, parallel=parallel,
+            healthcare=healthcare,
+        )
+        treatment_mc = run_mc(
+            cfg, interventions=resolved, n_runs=n_runs, base_seed=seed_offset,
+            initial_infected=initial_infected, parallel=parallel,
+            healthcare=healthcare,
+        )
+        baseline_results.append(baseline_mc)
+        treatment_results.append(treatment_mc)
+        if healthcare is not None:
+            baseline_hc.append(baseline_mc.healthcare_outcomes)
+            treatment_hc.append(treatment_mc.healthcare_outcomes)
 
     return ComparisonResult(
         cfg=cfg,
-        interventions_resolved=[interventions_list],
-        baseline_results=[baseline_mc],
-        treatment_results=[treatment_mc],
+        interventions_resolved=resolved_list,
+        baseline_results=baseline_results,
+        treatment_results=treatment_results,
         baseline_healthcare=baseline_hc,
         treatment_healthcare=treatment_hc,
-        intervention_samples=None,
+        intervention_samples=samples_list,
     )

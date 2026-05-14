@@ -167,3 +167,53 @@ def test_run_comparison_with_healthcare():
     assert result.treatment_healthcare is not None
     assert len(result.baseline_healthcare) == 1
     assert len(result.baseline_healthcare[0]) == 2
+
+
+from sir.distributions import dist
+
+
+def test_contact_reduction_with_distribution_returns_uncertain():
+    from sir.comparison import UncertainIntervention
+    inter = contact_reduction(
+        people=dist.uniform(800, 1200),
+        events_per_week=3,
+        encounters_per_event=5,
+        window=(10, 30),
+    )
+    assert isinstance(inter, UncertainIntervention)
+
+
+def test_run_comparison_with_uncertainty():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 30})
+    inter = transmission_reduction(
+        p_factor=dist.uniform(0.3, 0.7), window=(5, 25),
+    )
+    result = run_comparison(
+        cfg, interventions=[inter], n_runs=2, n_psa_samples=3,
+        base_seed=0, initial_infected=5, parallel=False,
+    )
+    assert len(result.baseline_results) == 3
+    assert len(result.treatment_results) == 3
+    assert result.intervention_samples is not None
+    assert len(result.intervention_samples) == 3
+
+
+def test_uncertain_intervention_samples_are_reproducible():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 20})
+    inter = transmission_reduction(
+        p_factor=dist.uniform(0.3, 0.7), window=(5, 15),
+    )
+    r1 = run_comparison(
+        cfg, interventions=[inter], n_runs=2, n_psa_samples=3,
+        base_seed=42, initial_infected=5, parallel=False,
+    )
+    r2 = run_comparison(
+        cfg, interventions=[inter], n_runs=2, n_psa_samples=3,
+        base_seed=42, initial_infected=5, parallel=False,
+    )
+    # Same seeds → same samples
+    for s1, s2 in zip(r1.intervention_samples, r2.intervention_samples):
+        for k in s1:
+            assert s1[k] == s2[k]
