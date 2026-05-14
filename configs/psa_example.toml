@@ -1,0 +1,49 @@
+# Example PSA spec for the SIR microfoundations ABM.
+# Each table key is a parameter path. Path syntax:
+#   - "gamma"                       (scalar attribute)
+#   - "V_a.60+"                     (tuple element identified by age-bin label)
+#   - "group_p_baseline.HOUSEHOLD"  (mapping element by GroupType name)
+
+[gamma]
+dist = "lognormal"
+mu = -1.946
+sigma = 0.15
+
+[kappa]
+dist = "uniform"
+lo = 0.5
+hi = 2.0
+
+[v_eff]
+dist = "beta"
+a = 16
+b = 4
+
+[c_vax]
+ci95 = [0.005, 0.020]
+
+[sick_attendance_multiplier]
+ci95 = [0.1, 0.5]
+family = "beta"
+
+["V_a.60+"]
+dist = "lognormal"
+mu = 3.40
+sigma = 0.5
+
+["V_a.20-29"]
+dist = "fixed"
+value = 1.0
+
+["group_p_baseline.HOUSEHOLD"]
+ci95 = [0.03, 0.07]
+
+["group_p_baseline.COMMUNITY"]
+ci95 = [0.0005, 0.002]
+family = "lognormal"
+
+["group_alpha.WORKPLACE"]
+dist = "triangular"
+lo = 1.5
+mode = 2.0
+hi = 2.5
