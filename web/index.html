@@ -450,44 +450,45 @@
     .summary-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.8rem 1rem;
+      border-radius: 6px;
+      padding: 0.55rem 0.75rem;
     }
 
     .summary-label {
       font-family: 'Inter', sans-serif;
-      font-size: 0.75rem;
+      font-size: 0.68rem;
       text-transform: uppercase;
       letter-spacing: 0.04em;
       color: var(--muted);
-      margin-bottom: 0.2rem;
+      margin-bottom: 0.15rem;
     }
 
     .summary-value {
       font-family: 'Inter', sans-serif;
-      font-size: 1.4rem;
+      font-size: 1.15rem;
       font-weight: 600;
       color: var(--text);
       font-variant-numeric: tabular-nums;
     }
 
-    .summary-value.small { font-size: 1.1rem; }
+    .summary-value.small { font-size: 0.95rem; }
 
     .summary-value.compare {
-      font-size: 1.25rem;
+      font-size: 1.05rem;
       display: flex;
       align-items: baseline;
-      gap: 0.4rem;
+      gap: 0.35rem;
+      flex-wrap: wrap;
     }
 
     .summary-value.compare .baseline {
-      font-size: 0.78rem;
+      font-size: 0.7rem;
       color: var(--muted);
       font-weight: 400;
     }
 
     .summary-value.compare .delta {
-      font-size: 0.78rem;
+      font-size: 0.7rem;
       font-weight: 500;
     }
 
@@ -922,32 +923,6 @@
 
       <section class="results">
 
-        <div class="plot-card">
-          <div class="plot-card-header">
-            <h4 id="plot-main-title">Outcome over time — with vs. without interventions</h4>
-            <div class="outcome-selector">
-              <label for="ctl-outcome">Show</label>
-              <select id="ctl-outcome" class="select" style="width: auto;">
-                <optgroup label="Disease">
-                  <option value="I">Infected (current)</option>
-                  <option value="new_inf">New infections per day</option>
-                  <option value="R">Cumulative infections</option>
-                  <option value="S">Susceptible remaining</option>
-                </optgroup>
-                <optgroup label="Hospital">
-                  <option value="hosp_prev">Hospital occupancy (beds in use)</option>
-                  <option value="hosp_admit">Hospital admissions per day</option>
-                </optgroup>
-                <optgroup label="ICU">
-                  <option value="icu_prev">ICU occupancy (beds in use)</option>
-                  <option value="icu_admit">ICU admissions per day</option>
-                </optgroup>
-              </select>
-            </div>
-          </div>
-          <div id="plot-main" class="plot"></div>
-        </div>
-
         <div class="summary-grid">
           <div class="summary-card">
             <div class="summary-label">$R_0$ (no behavior)</div>
@@ -973,6 +948,32 @@
             <div class="summary-label">Net welfare</div>
             <div class="summary-value compare" id="sum-welfare">—</div>
           </div>
+        </div>
+
+        <div class="plot-card">
+          <div class="plot-card-header">
+            <h4 id="plot-main-title">Outcome over time — with vs. without interventions</h4>
+            <div class="outcome-selector">
+              <label for="ctl-outcome">Show</label>
+              <select id="ctl-outcome" class="select" style="width: auto;">
+                <optgroup label="Disease">
+                  <option value="I">Infected (current)</option>
+                  <option value="new_inf">New infections per day</option>
+                  <option value="R">Cumulative infections</option>
+                  <option value="S">Susceptible remaining</option>
+                </optgroup>
+                <optgroup label="Hospital">
+                  <option value="hosp_prev">Hospital occupancy (beds in use)</option>
+                  <option value="hosp_admit">Hospital admissions per day</option>
+                </optgroup>
+                <optgroup label="ICU">
+                  <option value="icu_prev">ICU occupancy (beds in use)</option>
+                  <option value="icu_admit">ICU admissions per day</option>
+                </optgroup>
+              </select>
+            </div>
+          </div>
+          <div id="plot-main" class="plot"></div>
         </div>
 
         <div class="intervention-panel">
@@ -1040,10 +1041,17 @@
               </div>
               <div class="control">
                 <div class="control-label">
-                  <span class="name">Meetings/week $Y$ <span class="info" data-tip="Person-meeting events removed per week per affected person. Multiply sessions/week by typical contacts per session: e.g., school = 5 days × ~10 close contacts = 50/wk; weekly choir of 20 people = ~20/wk; soccer practice 3×/wk with 5 close contacts each = 15/wk.">?</span></span>
-                  <span class="value" id="val-cy">15</span>
+                  <span class="name">Events/week $Y$ <span class="info" data-tip="How often per week each affected person would have attended this activity. Weekday job = 5; weekly choir = 1; daily school = 5; twice-weekly gym = 2.">?</span></span>
+                  <span class="value" id="val-cy">3</span>
                 </div>
-                <input type="range" id="ctl-cy" min="0.5" max="80" step="0.5" value="15" />
+                <input type="range" id="ctl-cy" min="0.1" max="14" step="0.1" value="3" />
+              </div>
+              <div class="control">
+                <div class="control-label">
+                  <span class="name">Encounters per event $Z$ <span class="info" data-tip="Close-contact partners per person per event. Soccer practice ≈ 5; school classroom ≈ 10; office meeting ≈ 15; restaurant table ≈ 3; large concert ≈ 3 close (many distant); place of worship ≈ 5.">?</span></span>
+                  <span class="value" id="val-cz">5</span>
+                </div>
+                <input type="range" id="ctl-cz" min="1" max="50" step="1" value="5" />
               </div>
               <div class="control">
                 <div class="control-label">
@@ -1137,7 +1145,7 @@
 
     const ids = ['N', 'T', 'I0', 'm0', 'p', 'gamma', 'V', 'alpha', 'kappa',
                  'istart', 'iend', 'ifactor',
-                 'cx', 'cy', 'cstart', 'cend',
+                 'cx', 'cy', 'cz', 'cstart', 'cend',
                  'hosprate', 'icurate', 'hospdelay', 'icudelay', 'hosplos', 'iculos'];
     const valEls = {};
     const ctlEls = {};
@@ -1155,15 +1163,15 @@
     const resetBtn = document.getElementById('reset-btn');
 
     // Preset values for contact-reduction intervention.
-    // Y = sessions/week × typical close-contact count per session.
+    // (cx people) × (cy events/week) × (cz encounters/event)
     const PRESETS = {
-      soccer:     { cx: 1000, cy: 15 },   // 3 × 5
-      school:     { cx: 2500, cy: 50 },   // 5 × 10
-      office:     { cx: 500,  cy: 75 },   // 5 × 15
-      restaurants:{ cx: 3000, cy: 9 },    // 3 × 3
-      worship:    { cx: 800,  cy: 5 },    // 1 × 5
-      concert:    { cx: 5000, cy: 1.5 },  // 0.5 × 3
-      lockdown:   { cx: 8000, cy: 56 },   // 7 × 8
+      soccer:     { cx: 1000, cy: 3,   cz: 5  },
+      school:     { cx: 2500, cy: 5,   cz: 10 },
+      office:     { cx: 500,  cy: 5,   cz: 15 },
+      restaurants:{ cx: 3000, cy: 3,   cz: 3  },
+      worship:    { cx: 800,  cy: 1,   cz: 5  },
+      concert:    { cx: 5000, cy: 0.5, cz: 3  },
+      lockdown:   { cx: 8000, cy: 7,   cz: 8  },
     };
 
     function fmt(id, v) {
@@ -1179,6 +1187,7 @@
       return String(Math.round(num));
     }
 
+
     function updateLabels() {
       for (const id of ids) valEls[id].textContent = fmt(id, ctlEls[id].value);
       // R0 estimate
@@ -1191,10 +1200,11 @@
       const N = parseFloat(ctlEls.N.value);
       const cx = parseFloat(ctlEls.cx.value);
       const cy = parseFloat(ctlEls.cy.value);
-      const meetingsPerDay = cx * cy / 7;
+      const cz = parseFloat(ctlEls.cz.value);
+      const meetingsPerDay = cx * cy * cz / 7;
       const m0Reduction = meetingsPerDay / N;
       const pct = m0 > 0 ? (m0Reduction / m0 * 100) : 0;
-      cintReadout.innerHTML = `Removes <strong>${meetingsPerDay.toLocaleString(undefined, {maximumFractionDigits:0})}</strong> meetings/day → effective m₀ drops by <strong>${m0Reduction.toFixed(3)}</strong> (${pct.toFixed(1)}%)`;
+      cintReadout.innerHTML = `<strong>${cx.toLocaleString()}</strong> ppl × <strong>${cy.toFixed(1)}</strong>/wk × <strong>${cz.toFixed(0)}</strong> = <strong>${meetingsPerDay.toLocaleString(undefined, {maximumFractionDigits:0})}</strong> meetings/day → effective m₀ drops by <strong>${m0Reduction.toFixed(3)}</strong> (${pct.toFixed(1)}%)`;
     }
 
     // Preset → fill sliders
@@ -1203,14 +1213,16 @@
       if (v in PRESETS) {
         ctlEls.cx.value = PRESETS[v].cx;
         ctlEls.cy.value = PRESETS[v].cy;
+        ctlEls.cz.value = PRESETS[v].cz;
         contactOnEl.checked = true;
         scheduleRun();
       }
     });
 
-    // When user manually edits cx/cy, switch preset back to "Custom"
+    // When user manually edits any of cx/cy/cz, switch preset back to "Custom"
     ctlEls.cx.addEventListener('input', () => { presetEl.value = 'custom'; });
     ctlEls.cy.addEventListener('input', () => { presetEl.value = 'custom'; });
+    ctlEls.cz.addEventListener('input', () => { presetEl.value = 'custom'; });
 
     let pendingRun = null;
     function scheduleRun() {
@@ -1285,7 +1297,7 @@ def _solve_foc(alpha, kappa, V, m0, p_eff, prev):
 
 def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
              behavioral, intervention_on, istart, iend, ifactor,
-             contact_on, cstart, cend, cx, cy,
+             contact_on, cstart, cend, cx, cy, cz,
              hosp_rate, icu_rate, hosp_delay, icu_delay, hosp_los, icu_los):
     T = int(T)
     N = float(N)
@@ -1313,9 +1325,10 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
             p_eff = p * ifactor
 
         # Contact-reduction intervention reduces m0 (population-average meetings/day)
+        # (cx people) × (cy events/wk) × (cz encounters/event) / 7 / N
         m0_eff = m0
         if contact_on and cstart <= t < cend:
-            reduction = (cx * cy) / 7.0 / N
+            reduction = (cx * cy * cz) / 7.0 / N
             m0_eff = max(0.01, m0 - reduction)
 
         if behavioral:
@@ -1462,6 +1475,7 @@ def simulate_pair(**kw):
         cend: get('cend'),
         cx: get('cx'),
         cy: get('cy'),
+        cz: get('cz'),
         hosp_rate: get('hosprate') / 100,
         icu_rate: get('icurate') / 100,
         hosp_delay: get('hospdelay'),
@@ -1489,7 +1503,7 @@ r = simulate_pair(
     istart=_inp['istart'], iend=_inp['iend'], ifactor=_inp['ifactor'],
     contact_on=_inp['contact_on'],
     cstart=_inp['cstart'], cend=_inp['cend'],
-    cx=_inp['cx'], cy=_inp['cy'],
+    cx=_inp['cx'], cy=_inp['cy'], cz=_inp['cz'],
     hosp_rate=_inp['hosp_rate'], icu_rate=_inp['icu_rate'],
     hosp_delay=_inp['hosp_delay'], icu_delay=_inp['icu_delay'],
     hosp_los=_inp['hosp_los'], icu_los=_inp['icu_los'],
