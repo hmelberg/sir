@@ -556,11 +556,15 @@
 
     .intervention-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 1.5rem 1.6rem;
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 1100px) {
+      .intervention-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 700px) {
       .intervention-grid { grid-template-columns: 1fr; }
     }
 
@@ -581,6 +585,7 @@
 
     .stripe.mask { background: rgba(234, 88, 12, 0.5); }
     .stripe.contact { background: rgba(22, 163, 74, 0.5); }
+    .stripe.vax { background: rgba(124, 58, 237, 0.5); }
 
     /* Outcome selector inside plot header */
 
@@ -1054,6 +1059,11 @@
                   <option value="cum_deaths">Cumulative deaths</option>
                   <option value="daily_deaths">Deaths per day</option>
                 </optgroup>
+                <optgroup label="Vaccination">
+                  <option value="Vax">Currently vaccinated</option>
+                  <option value="cum_vax">Cumulative vaccinated</option>
+                  <option value="new_vax">Vaccinations per day</option>
+                </optgroup>
               </select>
             </div>
           </div>
@@ -1153,6 +1163,52 @@
               </div>
               <div class="effect-readout" id="cint-readout">Removes <strong>—</strong> meetings/day → effective m₀ drops by <strong>—</strong></div>
             </div>
+
+            <div class="intervention-col">
+              <h4><span class="stripe vax"></span> Vaccination <span class="info" data-tip="Roll out vaccine to susceptibles during the window. Eldest-first allocation. Shaded purple on the plots.">?</span></h4>
+              <div class="toggle-row">
+                <label class="control-toggle">
+                  <input type="checkbox" id="ctl-vax-on" />
+                  Enable
+                </label>
+              </div>
+              <div class="control">
+                <div class="control-label">
+                  <span class="name">Doses/day <span class="info" data-tip="Number of doses offered each day during the rollout window. Real-world rates vary widely; a fast COVID-style rollout in a city of 10,000 might run 50–200 doses/day during peak campaign weeks.">?</span></span>
+                  <span class="value" id="val-vdoses">50</span>
+                </div>
+                <input type="range" id="ctl-vdoses" min="0" max="500" step="5" value="50" />
+              </div>
+              <div class="control">
+                <div class="control-label">
+                  <span class="name">Uptake rate <span class="info" data-tip="Fraction of offered doses actually accepted. Captures refusal at the population level. 1.0 = everyone takes it; 0.5 = half refuse. Real respiratory-vaccine uptake commonly sits in the 0.4–0.8 range.">?</span></span>
+                  <span class="value" id="val-vuptake">80%</span>
+                </div>
+                <input type="range" id="ctl-vuptake" min="0" max="1" step="0.01" value="0.8" />
+              </div>
+              <div class="control">
+                <div class="control-label">
+                  <span class="name">Efficacy v<sub>eff</sub> <span class="info" data-tip="Per-vaccinee transmission reduction. 0.8 means a vaccinated person who would otherwise be infected is 80% less likely to become so. Modeled as a population-average constant; per-agent variation isn't supported here.">?</span></span>
+                  <span class="value" id="val-veff">0.80</span>
+                </div>
+                <input type="range" id="ctl-veff" min="0" max="1" step="0.01" value="0.8" />
+              </div>
+              <div class="control">
+                <div class="control-label">
+                  <span class="name">Start day <span class="info" data-tip="When the vaccination program begins. Earlier is generally better; behavior of agents already protects somewhat once prevalence rises.">?</span></span>
+                  <span class="value" id="val-vstart">20</span>
+                </div>
+                <input type="range" id="ctl-vstart" min="0" max="500" step="1" value="20" />
+              </div>
+              <div class="control">
+                <div class="control-label">
+                  <span class="name">End day <span class="info" data-tip="When the vaccination program ends.">?</span></span>
+                  <span class="value" id="val-vend">200</span>
+                </div>
+                <input type="range" id="ctl-vend" min="10" max="600" step="1" value="200" />
+              </div>
+              <div class="effect-readout" id="vax-readout"><strong>—</strong> effective doses/day · max coverage <strong>—</strong></div>
+            </div>
           </div>
         </div>
       </section>
@@ -1231,7 +1287,8 @@
                  'istart', 'iend', 'ifactor',
                  'cx', 'cy', 'cz', 'cstart', 'cend',
                  'hosprate', 'icurate', 'hospdelay', 'icudelay', 'hosplos', 'iculos',
-                 'deathrate', 'deathdelay', 'yllpd'];
+                 'deathrate', 'deathdelay', 'yllpd',
+                 'vdoses', 'vuptake', 'veff', 'vstart', 'vend'];
     const valEls = {};
     const ctlEls = {};
     for (const id of ids) {
@@ -1241,8 +1298,10 @@
     const behavioralEl = document.getElementById('ctl-behavioral');
     const intOnEl = document.getElementById('ctl-int-on');
     const contactOnEl = document.getElementById('ctl-cint-on');
+    const vaxOnEl = document.getElementById('ctl-vax-on');
     const presetEl = document.getElementById('ctl-cpreset');
     const cintReadout = document.getElementById('cint-readout');
+    const vaxReadout = document.getElementById('vax-readout');
     const statusEl = document.getElementById('status');
     const runBtn = document.getElementById('run-btn');
     const resetBtn = document.getElementById('reset-btn');
@@ -1270,6 +1329,8 @@
       if (id === 'icurate') return num.toFixed(2) + '%';
       if (id === 'deathrate') return num.toFixed(2) + '%';
       if (id === 'yllpd') return num.toFixed(1);
+      if (id === 'vuptake') return (num * 100).toFixed(0) + '%';
+      if (id === 'veff') return num.toFixed(2);
       if ((id === 'm0' || id === 'cx') && num % 1 !== 0) return num.toFixed(1);
       return String(Math.round(num));
     }
@@ -1292,6 +1353,15 @@
       const m0Reduction = meetingsPerDay / N;
       const pct = m0 > 0 ? (m0Reduction / m0 * 100) : 0;
       cintReadout.innerHTML = `<strong>${cx.toLocaleString()}</strong> ppl × <strong>${cy.toFixed(1)}</strong>/wk × <strong>${cz.toFixed(0)}</strong> = <strong>${meetingsPerDay.toLocaleString(undefined, {maximumFractionDigits:0})}</strong> meetings/day → effective m₀ drops by <strong>${m0Reduction.toFixed(3)}</strong> (${pct.toFixed(1)}%)`;
+      // Vaccination readout
+      const vdoses = parseFloat(ctlEls.vdoses.value);
+      const vuptake = parseFloat(ctlEls.vuptake.value);
+      const vstart = parseFloat(ctlEls.vstart.value);
+      const vend = parseFloat(ctlEls.vend.value);
+      const effectiveDoses = vdoses * vuptake;
+      const totalPotential = Math.min(N, effectiveDoses * Math.max(0, vend - vstart));
+      const maxCoverage = N > 0 ? (totalPotential / N * 100) : 0;
+      vaxReadout.innerHTML = `<strong>${effectiveDoses.toFixed(0)}</strong> effective doses/day · max coverage <strong>${maxCoverage.toFixed(1)}%</strong>`;
     }
 
     // Preset → fill sliders
@@ -1323,6 +1393,7 @@
     behavioralEl.addEventListener('change', scheduleRun);
     intOnEl.addEventListener('change', scheduleRun);
     contactOnEl.addEventListener('change', scheduleRun);
+    vaxOnEl.addEventListener('change', scheduleRun);
     runBtn.addEventListener('click', runSimulation);
 
     const defaults = {};
@@ -1330,6 +1401,7 @@
     const defaultBehavioral = behavioralEl.checked;
     const defaultIntOn = intOnEl.checked;
     const defaultContactOn = contactOnEl.checked;
+    const defaultVaxOn = vaxOnEl.checked;
     const defaultPreset = presetEl.value;
 
     resetBtn.addEventListener('click', () => {
@@ -1337,6 +1409,7 @@
       behavioralEl.checked = defaultBehavioral;
       intOnEl.checked = defaultIntOn;
       contactOnEl.checked = defaultContactOn;
+      vaxOnEl.checked = defaultVaxOn;
       presetEl.value = defaultPreset;
       scheduleRun();
     });
@@ -1386,16 +1459,19 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
              behavioral, intervention_on, istart, iend, ifactor,
              contact_on, cstart, cend, cx, cy, cz,
              hosp_rate, icu_rate, hosp_delay, icu_delay, hosp_los, icu_los,
-             death_rate, death_delay, yll_per_death):
+             death_rate, death_delay, yll_per_death,
+             vax_on, vstart, vend, vdoses, vuptake, veff):
     T = int(T)
     N = float(N)
     S = np.zeros(T + 1)
     I = np.zeros(T + 1)
     R = np.zeros(T + 1)
+    Vax = np.zeros(T + 1)
     theta_h = np.zeros(T + 1)
     e_h = np.zeros(T + 1)
     m0_eff_h = np.zeros(T + 1)
     new_inf_h = np.zeros(T + 1)
+    new_vax_h = np.zeros(T + 1)
     S[0] = N - I0
     I[0] = I0
 
@@ -1405,6 +1481,16 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
     infection_cost = 0.0
 
     for t in range(T):
+        # Apply vaccination FIRST (move from S to Vax)
+        S_now = S[t]
+        Vax_now = Vax[t]
+        if vax_on and vstart <= t < vend:
+            effective_doses = vdoses * vuptake
+            actual = min(effective_doses, S_now)
+            S_now -= actual
+            Vax_now += actual
+            new_vax_h[t] = actual
+
         prev = I[t] / N
 
         # Mask intervention reduces p
@@ -1412,8 +1498,7 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
         if intervention_on and istart <= t < iend:
             p_eff = p * ifactor
 
-        # Contact-reduction intervention reduces m0 (population-average meetings/day)
-        # (cx people) × (cy events/wk) × (cz encounters/event) / 7 / N
+        # Contact-reduction intervention reduces m0
         m0_eff = m0
         if contact_on and cstart <= t < cend:
             reduction = (cx * cy * cz) / 7.0 / N
@@ -1426,11 +1511,19 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
         m_eff = theta * m0_eff
         p_per_meeting = p_eff * (1.0 - e)
         pi = 1.0 - (1.0 - p_per_meeting) ** (m_eff * prev) if (m_eff * prev) > 0 else 0.0
-        new_inf = pi * S[t]
+
+        # Infections: susceptibles hit by full hazard, vaccinated hit at (1-veff)
+        new_inf_S = pi * S_now
+        new_inf_Vax = pi * (1.0 - veff) * Vax_now
+        new_inf = new_inf_S + new_inf_Vax
         new_rec = gamma * I[t]
-        S[t + 1] = S[t] - new_inf
+
+        # Update end-of-day state
+        S[t + 1] = S_now - new_inf_S
+        Vax[t + 1] = Vax_now - new_inf_Vax
         I[t + 1] = I[t] + new_inf - new_rec
         R[t + 1] = R[t] + new_rec
+
         theta_h[t] = theta
         e_h[t] = e
         m0_eff_h[t] = m0_eff
@@ -1443,19 +1536,7 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
     e_h[-1] = e_h[-2] if T > 0 else 0.0
     m0_eff_h[-1] = m0_eff_h[-2] if T > 0 else m0
     new_inf_h[-1] = 0.0
-
-    # Traditional SIR: simple mass-action with beta = m0 * p (no behavior, no interventions)
-    beta_trad = m0 * p
-    S_t = np.zeros(T + 1); I_t = np.zeros(T + 1); R_t = np.zeros(T + 1)
-    S_t[0] = N - I0; I_t[0] = I0
-    for t in range(T):
-        new = beta_trad * S_t[t] * I_t[t] / N
-        rec = gamma * I_t[t]
-        # Clamp to avoid negative S in extreme parameter regimes
-        new = min(new, S_t[t])
-        S_t[t + 1] = S_t[t] - new
-        I_t[t + 1] = I_t[t] + new - rec
-        R_t[t + 1] = R_t[t] + rec
+    new_vax_h[-1] = 0.0
 
     # Healthcare burden: lag new infections, then sum over LOS for prevalence
     hd = int(hosp_delay); ud = int(icu_delay)
@@ -1485,15 +1566,21 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
     total_deaths = float(cum_deaths[-1])
     total_yll = total_deaths * yll_per_death
 
+    cum_vax = np.cumsum(new_vax_h)
+    total_vax = float(cum_vax[-1])
+
     welfare = attendance_util - precaution_cost - infection_cost
     return {
         "S": S.tolist(),
         "I": I.tolist(),
         "R": R.tolist(),
+        "Vax": Vax.tolist(),
         "theta": theta_h.tolist(),
         "e": e_h.tolist(),
         "m0_eff": m0_eff_h.tolist(),
         "new_inf": new_inf_h.tolist(),
+        "new_vax": new_vax_h.tolist(),
+        "cum_vax": cum_vax.tolist(),
         "hosp_admit": hosp_admit.tolist(),
         "hosp_prev": hosp_prev.tolist(),
         "icu_admit": icu_admit.tolist(),
@@ -1505,6 +1592,7 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
         "peak_icu_prev": float(icu_prev.max()),
         "total_deaths": total_deaths,
         "total_yll": float(total_yll),
+        "total_vax": total_vax,
         "final_R": float(R[-1]),
         "attendance_util": float(attendance_util),
         "precaution_cost": float(precaution_cost),
@@ -1517,7 +1605,7 @@ def simulate_pair(**kw):
     """Run the simulation with the user's settings and with all interventions
     disabled (counterfactual baseline). Returns both for side-by-side plotting."""
     with_r = simulate(**kw)
-    baseline_kw = {**kw, "intervention_on": False, "contact_on": False}
+    baseline_kw = {**kw, "intervention_on": False, "contact_on": False, "vax_on": False}
     without_r = simulate(**baseline_kw)
     return {"with_int": with_r, "without_int": without_r}
 `;
@@ -1586,6 +1674,12 @@ def simulate_pair(**kw):
         death_rate: get('deathrate') / 100,
         death_delay: get('deathdelay'),
         yll_per_death: get('yllpd'),
+        vax_on: vaxOnEl.checked,
+        vstart: get('vstart'),
+        vend: get('vend'),
+        vdoses: get('vdoses'),
+        vuptake: get('vuptake'),
+        veff: get('veff'),
       };
     }
 
@@ -1613,6 +1707,9 @@ r = simulate_pair(
     hosp_los=_inp['hosp_los'], icu_los=_inp['icu_los'],
     death_rate=_inp['death_rate'], death_delay=_inp['death_delay'],
     yll_per_death=_inp['yll_per_death'],
+    vax_on=_inp['vax_on'],
+    vstart=_inp['vstart'], vend=_inp['vend'],
+    vdoses=_inp['vdoses'], vuptake=_inp['vuptake'], veff=_inp['veff'],
 )
 json.dumps(r)
 `);
@@ -1644,6 +1741,9 @@ json.dumps(r)
       icu_admit:  { label: 'ICU admissions per day',       ytitle: 'ICU admissions / day',    fmt: ',.1f' },
       cum_deaths: { label: 'Cumulative deaths',            ytitle: 'Deaths',                  fmt: ',d' },
       daily_deaths:{ label: 'Deaths per day',              ytitle: 'Deaths / day',            fmt: ',.1f' },
+      Vax:        { label: 'Currently vaccinated',         ytitle: 'Vaccinated (still at risk)', fmt: ',d' },
+      cum_vax:    { label: 'Cumulative vaccinated',        ytitle: 'Cumulative vaccinated',   fmt: ',d' },
+      new_vax:    { label: 'Vaccinations per day',         ytitle: 'Doses administered / day', fmt: ',d' },
     };
 
     function bandsForInp(inp) {
@@ -1660,6 +1760,13 @@ json.dumps(r)
           type: 'rect', xref: 'x', yref: 'paper',
           x0: inp.cstart, x1: inp.cend, y0: 0, y1: 1,
           fillcolor: 'rgba(22, 163, 74, 0.10)', line: { width: 0 }, layer: 'below',
+        });
+      }
+      if (inp.vax_on && inp.vstart < inp.vend) {
+        bands.push({
+          type: 'rect', xref: 'x', yref: 'paper',
+          x0: inp.vstart, x1: inp.vend, y0: 0, y1: 1,
+          fillcolor: 'rgba(124, 58, 237, 0.10)', line: { width: 0 }, layer: 'below',
         });
       }
       return bands;
