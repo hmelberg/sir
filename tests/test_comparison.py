@@ -325,3 +325,45 @@ def test_run_comparison_with_vaccination():
     # Vaccination should reduce or at least not increase deaths
     df = result.outcome_deltas()
     assert "total_deaths" in df.index
+
+
+from sir.cba import default_cba_config
+
+
+def test_run_comparison_with_cba_attaches_reports():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 30})
+    hc = default_healthcare_config()
+    cba_cfg = default_cba_config()
+    inter = transmission_reduction(p_factor=0.5, window=(5, 25))
+    result = run_comparison(
+        cfg, interventions=[inter], n_runs=2, base_seed=0,
+        initial_infected=5, parallel=False, healthcare=hc,
+        cba=cba_cfg,
+    )
+    assert result.baseline_cba is not None
+    assert result.treatment_cba is not None
+    # One list per PSA sample x n_runs runs
+    assert len(result.baseline_cba) == 1
+    assert len(result.baseline_cba[0]) == 2
+    from sir.cba import CBAReport
+    assert isinstance(result.baseline_cba[0][0], CBAReport)
+
+
+def test_run_comparison_cba_summary_returns_dataframe():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 30})
+    hc = default_healthcare_config()
+    cba_cfg = default_cba_config()
+    inter = transmission_reduction(p_factor=0.5, window=(5, 25))
+    result = run_comparison(
+        cfg, interventions=[inter], n_runs=2, base_seed=0,
+        initial_infected=5, parallel=False, healthcare=hc,
+        cba=cba_cfg,
+    )
+    df = result.cba_summary()
+    import pandas as pd
+    assert isinstance(df, pd.DataFrame)
+    expected_cols = {"baseline", "treatment", "delta", "unit"}
+    assert expected_cols.issubset(df.columns)
+    assert len(df) == 9  # 9 streams

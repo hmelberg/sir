@@ -43,3 +43,18 @@ def test_mc_healthcare_default_none():
     cfg = default_config()
     result = run_mc(cfg, interventions=[], n_runs=2, base_seed=0, parallel=False)
     assert result.healthcare_outcomes is None
+
+
+def test_mc_new_infections_by_age_shape():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 30})
+    result = run_mc(cfg, interventions=[], n_runs=3, base_seed=0, parallel=False)
+    assert result.new_infections_by_age.shape == (3, cfg.T + 1, 7)
+
+
+def test_mc_new_infections_by_age_sums_to_total():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 30})
+    result = run_mc(cfg, interventions=[], n_runs=2, base_seed=0, parallel=False)
+    per_run_total = result.new_infections_by_age.sum(axis=2)
+    np.testing.assert_array_equal(per_run_total, result.new_infections_history)

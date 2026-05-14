@@ -13,6 +13,7 @@ from typing import Any, Callable, Sequence
 import numpy as np
 import pandas as pd
 
+from sir.cba import CBAConfig, CBAReport, compute_cba
 from sir.config import ScenarioConfig
 from sir.constants import GroupType
 from sir.healthcare import HealthcareConfig, HealthcareOutcomes
@@ -35,6 +36,8 @@ class ComparisonResult:
     baseline_healthcare: list[list[HealthcareOutcomes]] | None
     treatment_healthcare: list[list[HealthcareOutcomes]] | None
     intervention_samples: list[dict[str, float]] | None
+    baseline_cba: list[list[CBAReport]] | None = None
+    treatment_cba: list[list[CBAReport]] | None = None
 
     def outcome_deltas(self) -> "pd.DataFrame":
         """Tidy DataFrame of with-vs-without deltas across PSA samples and MC runs.
@@ -131,6 +134,32 @@ class ComparisonResult:
 
         df = pd.DataFrame(rows).set_index("outcome")
         return df
+
+    def cba_summary(self) -> "pd.DataFrame":
+        """Tidy CBA delta table across PSA samples and MC runs.
+
+        Returns a DataFrame indexed by stream with columns:
+        baseline (mean), treatment (mean), delta, unit.
+        Available only if a CBAConfig was passed to run_comparison.
+        """
+        if self.baseline_cba is None or self.treatment_cba is None:
+            raise ValueError("CBA summary requires cba=CBAConfig in run_comparison")
+        b_flat = [r for psa in self.baseline_cba for r in psa]
+        t_flat = [r for psa in self.treatment_cba for r in psa]
+        stream_names = list(b_flat[0].streams.keys())
+        units = b_flat[0].units
+        rows = []
+        for name in stream_names:
+            b_vals = np.array([r.streams[name] for r in b_flat])
+            t_vals = np.array([r.streams[name] for r in t_flat])
+            rows.append({
+                "stream": name,
+                "baseline": float(b_vals.mean()),
+                "treatment": float(t_vals.mean()),
+                "delta": float((t_vals - b_vals).mean()),
+                "unit": units[name],
+            })
+        return pd.DataFrame(rows).set_index("stream")
 
 
 @dataclass
@@ -374,6 +403,7 @@ def run_comparison(
     initial_infected: int = 10,
     healthcare: HealthcareConfig | None = None,
     parallel: bool = True,
+    cba: CBAConfig | None = None,
 ) -> ComparisonResult:
     """Run baseline vs treatment, with optional PSA over uncertain intervention parameters."""
     interventions_list = list(interventions)
@@ -406,6 +436,8 @@ def run_comparison(
     treatment_results = []
     baseline_hc = [] if healthcare is not None else None
     treatment_hc = [] if healthcare is not None else None
+    baseline_cba: list[list[CBAReport]] | None = [] if cba is not None and healthcare is not None else None
+    treatment_cba: list[list[CBAReport]] | None = [] if cba is not None and healthcare is not None else None
 
     for psa_idx, resolved in enumerate(resolved_list):
         seed_offset = base_seed + psa_idx * n_runs * 2
@@ -425,6 +457,40 @@ def run_comparison(
             baseline_hc.append(baseline_mc.healthcare_outcomes)
             treatment_hc.append(treatment_mc.healthcare_outcomes)
 
+        if cba is not None and healthcare is not None:
+            from types import SimpleNamespace
+            b_reports = []
+            t_reports = []
+            for run_idx in range(n_runs):
+                b_sim = SimpleNamespace(
+                    new_infections_history=baseline_mc.new_infections_history[run_idx],
+                    new_infections_by_age=baseline_mc.new_infections_by_age[run_idx],
+                    V_history=baseline_mc.V_history[run_idx],
+                )
+                t_sim = SimpleNamespace(
+                    new_infections_history=treatment_mc.new_infections_history[run_idx],
+                    new_infections_by_age=treatment_mc.new_infections_by_age[run_idx],
+                    V_history=treatment_mc.V_history[run_idx],
+                )
+                policy_cost_b = 0.0
+                # Estimate policy cost from active interventions on a mid-window day
+                mid = max(0, cfg.T // 2)
+                policy_cost_t = sum(
+                    i.direct_cost_per_day
+                    for i in resolved
+                    if i.is_active(mid)
+                )
+                b_reports.append(
+                    compute_cba(b_sim, baseline_mc.healthcare_outcomes[run_idx],
+                                healthcare, cba, policy_cost_per_day=policy_cost_b)
+                )
+                t_reports.append(
+                    compute_cba(t_sim, treatment_mc.healthcare_outcomes[run_idx],
+                                healthcare, cba, policy_cost_per_day=policy_cost_t)
+                )
+            baseline_cba.append(b_reports)
+            treatment_cba.append(t_reports)
+
     return ComparisonResult(
         cfg=cfg,
         interventions_resolved=resolved_list,
@@ -433,4 +499,6 @@ def run_comparison(
         baseline_healthcare=baseline_hc,
         treatment_healthcare=treatment_hc,
         intervention_samples=samples_list,
+        baseline_cba=baseline_cba,
+        treatment_cba=treatment_cba,
     )

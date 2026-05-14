@@ -19,6 +19,7 @@ class MCResult:
     R_history: np.ndarray
     V_history: np.ndarray
     new_infections_history: np.ndarray
+    new_infections_by_age: np.ndarray  # (n_runs, T+1, 7)
     welfare_totals: np.ndarray         # (n_runs,)
     welfare_components: dict[str, np.ndarray]  # each (n_runs,)
     healthcare_outcomes: list[HealthcareOutcomes] | None = None
@@ -37,6 +38,7 @@ def _one_run(
         result.R_history,
         result.V_history,
         result.new_infections_history,
+        result.new_infections_by_age,
         result.welfare.total_welfare(),
         dict(result.welfare.totals),
         hc,
@@ -69,13 +71,14 @@ def run_mc(
     R = np.stack([r[2] for r in results])
     V = np.stack([r[3] for r in results])
     NI = np.stack([r[4] for r in results])
-    W = np.array([r[5] for r in results])
+    NI_age = np.stack([r[5] for r in results])
+    W = np.array([r[6] for r in results])
 
-    components_keys = list(results[0][6].keys())
+    components_keys = list(results[0][7].keys())
     components = {
-        k: np.array([r[6][k] for r in results]) for k in components_keys
+        k: np.array([r[7][k] for r in results]) for k in components_keys
     }
-    hc_outcomes = [r[7] for r in results] if healthcare is not None else None
+    hc_outcomes = [r[8] for r in results] if healthcare is not None else None
 
     return MCResult(
         S_history=S,
@@ -83,6 +86,7 @@ def run_mc(
         R_history=R,
         V_history=V,
         new_infections_history=NI,
+        new_infections_by_age=NI_age,
         welfare_totals=W,
         welfare_components=components,
         healthcare_outcomes=hc_outcomes,
