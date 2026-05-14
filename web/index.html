@@ -275,6 +275,89 @@
       font-variant-numeric: tabular-nums;
     }
 
+    .control-label .name {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .info {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #e7e5e4;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      cursor: help;
+      position: relative;
+      transition: background 0.1s, color 0.1s;
+    }
+
+    .info:hover {
+      background: var(--accent);
+      color: white;
+    }
+
+    .info[data-tip]::after {
+      content: attr(data-tip);
+      position: absolute;
+      top: 50%;
+      left: calc(100% + 8px);
+      transform: translateY(-50%);
+      width: 240px;
+      padding: 0.55rem 0.7rem;
+      background: #1c1917;
+      color: white;
+      font-size: 0.78rem;
+      font-weight: 400;
+      line-height: 1.45;
+      border-radius: 6px;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.12s, visibility 0.12s;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      white-space: normal;
+      text-align: left;
+    }
+
+    .info[data-tip]::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: calc(100% + 2px);
+      transform: translateY(-50%);
+      border: 6px solid transparent;
+      border-right-color: #1c1917;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.12s, visibility 0.12s;
+      z-index: 100;
+    }
+
+    .info:hover[data-tip]::after,
+    .info:hover[data-tip]::before {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .toggle-row .control-toggle {
+      margin-bottom: 0;
+    }
+
     .control input[type="range"] {
       width: 100%;
       accent-color: var(--accent);
@@ -597,76 +680,118 @@
         <h3>Disease</h3>
 
         <div class="control">
-          <div class="control-label"><span>Population $N$</span><span class="value" id="val-N">10000</span></div>
+          <div class="control-label">
+            <span class="name">Population $N$ <span class="info" data-tip="Total population size. Larger N gives smoother trajectories; the dynamics otherwise scale linearly.">?</span></span>
+            <span class="value" id="val-N">10000</span>
+          </div>
           <input type="range" id="ctl-N" min="1000" max="100000" step="1000" value="10000" />
         </div>
 
         <div class="control">
-          <div class="control-label"><span>Days $T$</span><span class="value" id="val-T">200</span></div>
+          <div class="control-label">
+            <span class="name">Days $T$ <span class="info" data-tip="Simulation horizon in days. Make sure T covers the full epidemic; otherwise the attack-rate summary is cut short.">?</span></span>
+            <span class="value" id="val-T">200</span>
+          </div>
           <input type="range" id="ctl-T" min="30" max="720" step="10" value="200" />
         </div>
 
         <div class="control">
-          <div class="control-label"><span>Initial infected $I_0$</span><span class="value" id="val-I0">10</span></div>
+          <div class="control-label">
+            <span class="name">Initial infected $I_0$ <span class="info" data-tip="Number of infected agents at day 0. With very small I₀ a real-world outbreak may fizzle out by chance — this deterministic model doesn't capture that.">?</span></span>
+            <span class="value" id="val-I0">10</span>
+          </div>
           <input type="range" id="ctl-I0" min="1" max="100" step="1" value="10" />
         </div>
 
         <div class="control">
-          <div class="control-label"><span>Meetings/day $m_0$</span><span class="value" id="val-m0">10</span></div>
+          <div class="control-label">
+            <span class="name">Meetings/day $m_0$ <span class="info" data-tip="Baseline meetings per person per day before behavioral response. Includes all contact-events: household, work, school, leisure, community.">?</span></span>
+            <span class="value" id="val-m0">10</span>
+          </div>
           <input type="range" id="ctl-m0" min="1" max="30" step="0.5" value="10" />
         </div>
 
         <div class="control">
-          <div class="control-label"><span>Per-meeting $p$</span><span class="value" id="val-p">0.040</span></div>
+          <div class="control-label">
+            <span class="name">Per-meeting $p$ <span class="info" data-tip="Probability that one meeting between an infected and a susceptible person transmits the disease. Masks, ventilation, and distancing reduce p.">?</span></span>
+            <span class="value" id="val-p">0.040</span>
+          </div>
           <input type="range" id="ctl-p" min="0.001" max="0.2" step="0.001" value="0.040" />
         </div>
 
         <div class="control">
-          <div class="control-label"><span>Recovery $\gamma$ (1/day)</span><span class="value" id="val-gamma">0.143</span></div>
+          <div class="control-label">
+            <span class="name">Recovery $\gamma$ (1/day) <span class="info" data-tip="Daily recovery rate. The mean infectious period is 1/γ. γ ≈ 0.143 corresponds to a 7-day infectious period (flu-like).">?</span></span>
+            <span class="value" id="val-gamma">0.143</span>
+          </div>
           <input type="range" id="ctl-gamma" min="0.05" max="0.5" step="0.005" value="0.143" />
         </div>
 
         <h3>Behavioral response</h3>
 
-        <label class="control-toggle">
-          <input type="checkbox" id="ctl-behavioral" checked />
-          Rational agents react to prevalence
-        </label>
+        <div class="toggle-row">
+          <label class="control-toggle">
+            <input type="checkbox" id="ctl-behavioral" checked />
+            Rational agents react to prevalence
+          </label>
+          <span class="info" data-tip="When on, each period agents choose attendance θ and precaution e to maximize utility minus expected infection cost. When off, θ=1 and e=0 throughout — pure mass-action SIR.">?</span>
+        </div>
 
         <div class="control">
-          <div class="control-label"><span>Infection cost $V$</span><span class="value" id="val-V">30</span></div>
+          <div class="control-label">
+            <span class="name">Infection cost $V$ <span class="info" data-tip="Total expected utility loss from getting infected. Bundles symptom suffering, hospitalization risk, mortality × VSL, and long-term sequelae. Higher V → more cautious agents.">?</span></span>
+            <span class="value" id="val-V">30</span>
+          </div>
           <input type="range" id="ctl-V" min="0" max="200" step="1" value="30" />
         </div>
 
         <div class="control">
-          <div class="control-label"><span>Meeting utility $\alpha$</span><span class="value" id="val-alpha">1.0</span></div>
+          <div class="control-label">
+            <span class="name">Meeting utility $\alpha$ <span class="info" data-tip="Utility weight on social contact: U = α·log(1+m). Higher α means meetings are more valuable, so agents resist cutting attendance even at high risk.">?</span></span>
+            <span class="value" id="val-alpha">1.0</span>
+          </div>
           <input type="range" id="ctl-alpha" min="0.1" max="3" step="0.05" value="1.0" />
         </div>
 
         <div class="control">
-          <div class="control-label"><span>Precaution cost $\kappa$</span><span class="value" id="val-kappa">1.0</span></div>
+          <div class="control-label">
+            <span class="name">Precaution cost $\kappa$ <span class="info" data-tip="Quadratic cost of precaution effort: c(e) = ½κe². Higher κ makes masks/distancing feel more burdensome, so agents take less precaution at a given risk.">?</span></span>
+            <span class="value" id="val-kappa">1.0</span>
+          </div>
           <input type="range" id="ctl-kappa" min="0.1" max="5" step="0.1" value="1.0" />
         </div>
 
         <h3>Intervention</h3>
 
-        <label class="control-toggle">
-          <input type="checkbox" id="ctl-int-on" />
-          Mask mandate (reduce $p$)
-        </label>
+        <div class="toggle-row">
+          <label class="control-toggle">
+            <input type="checkbox" id="ctl-int-on" />
+            Mask mandate (reduce $p$)
+          </label>
+          <span class="info" data-tip="Mandated reduction in per-meeting transmission probability during a fixed window — e.g., masks, ventilation rules, capacity limits. Shaded on the plots.">?</span>
+        </div>
 
         <div class="control">
-          <div class="control-label"><span>Start day</span><span class="value" id="val-istart">20</span></div>
+          <div class="control-label">
+            <span class="name">Start day <span class="info" data-tip="First day of the mandate. Earlier interventions catch the epidemic before it grows large.">?</span></span>
+            <span class="value" id="val-istart">20</span>
+          </div>
           <input type="range" id="ctl-istart" min="0" max="500" step="1" value="20" />
         </div>
 
         <div class="control">
-          <div class="control-label"><span>End day</span><span class="value" id="val-iend">120</span></div>
+          <div class="control-label">
+            <span class="name">End day <span class="info" data-tip="First day after the mandate is lifted. Lifting too early may cause a second wave if susceptibles remain.">?</span></span>
+            <span class="value" id="val-iend">120</span>
+          </div>
           <input type="range" id="ctl-iend" min="10" max="600" step="1" value="120" />
         </div>
 
         <div class="control">
-          <div class="control-label"><span>Reduce $p$ to</span><span class="value" id="val-ifactor">0.50×</span></div>
+          <div class="control-label">
+            <span class="name">Reduce $p$ to <span class="info" data-tip="Multiplier on per-meeting transmission p while the mandate is active. 0.5× means masks block 50% of transmission; 0.1× means near-total blockage.">?</span></span>
+            <span class="value" id="val-ifactor">0.50×</span>
+          </div>
           <input type="range" id="ctl-ifactor" min="0.05" max="1.0" step="0.05" value="0.5" />
         </div>
 
