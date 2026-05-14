@@ -20,6 +20,7 @@ from sir.interventions import (
     Intervention,
     _apply_set_p_mult,
     _filter_group_type_in,
+    vaccinate_eldest_first,
 )
 from sir.monte_carlo import MCResult, run_mc
 from sir.psa import ParameterDistribution
@@ -305,6 +306,61 @@ def _build_contact_reduction(
         apply_to_groups=partial(_apply_contact_reduction, meetings_per_day=meetings_per_day),
         spillover_cost_fn=spillover_fn,
     )
+
+
+# ---------------- vaccination ----------------
+
+def _build_vaccination(
+    doses_per_day: float, uptake_rate: float, window: tuple[int, int]
+) -> Intervention:
+    """Build a deterministic vaccination Intervention.
+
+    Effective daily doses = doses_per_day * uptake_rate. The intervention
+    prioritizes the oldest still-susceptible agents under the v0.2 spec
+    (eldest-first allocation).
+    """
+    effective_doses = max(0, int(round(doses_per_day * uptake_rate)))
+    return vaccinate_eldest_first(window[0], window[1], effective_doses)
+
+
+def _build_vaccination_from_resolved(
+    resolved: dict, window: tuple[int, int]
+) -> Intervention:
+    return _build_vaccination(
+        resolved["doses_per_day"], resolved["uptake_rate"], window,
+    )
+
+
+def vaccination(
+    doses_per_day,
+    window: tuple[int, int],
+    uptake_rate=1.0,
+):
+    """Vaccination intervention with adjustable uptake.
+
+    Args:
+        doses_per_day: number of doses offered each day (float or ParameterDistribution).
+        window: (start_day, end_day) tuple defining the rollout window.
+        uptake_rate: fraction of offered doses actually accepted (default 1.0).
+            Captures refusal at the population level (float or ParameterDistribution).
+
+    Vaccine efficacy is set globally via `ScenarioConfig.v_eff` and applies to
+    transmission for agents in the V state. To model uncertainty on efficacy,
+    sweep `v_eff` via the standard PSA workflow (TOML spec) since it's a
+    scenario parameter rather than an intervention parameter.
+
+    Returns an Intervention if both doses_per_day and uptake_rate are floats,
+    or an UncertainIntervention if either is a ParameterDistribution.
+    """
+    has_dist = (
+        isinstance(doses_per_day, ParameterDistribution)
+        or isinstance(uptake_rate, ParameterDistribution)
+    )
+    if has_dist:
+        params = {"doses_per_day": doses_per_day, "uptake_rate": uptake_rate}
+        builder = partial(_build_vaccination_from_resolved, window=window)
+        return UncertainIntervention(name="vaccination", builder=builder, params=params)
+    return _build_vaccination(doses_per_day, uptake_rate, window)
 
 
 # ---------------- run_comparison ----------------

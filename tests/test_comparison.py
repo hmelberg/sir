@@ -3,12 +3,14 @@ import pandas as pd
 
 from sir.comparison import (
     ComparisonResult,
+    UncertainIntervention,
     contact_reduction,
     run_comparison,
     transmission_reduction,
+    vaccination,
 )
 from sir.config import default_config
-from sir.constants import GroupType
+from sir.constants import DiseaseState, GroupType
 from sir.distributions import dist
 from sir.healthcare import default_healthcare_config
 from sir.interventions import Intervention, apply_interventions
@@ -254,3 +256,72 @@ def test_outcome_deltas_without_healthcare_omits_healthcare_outcomes():
     # Health outcomes should NOT be in the table when healthcare is None
     assert "total_deaths" not in df.index
     assert "peak_I" in df.index
+
+
+# -------------------- Vaccination --------------------
+
+
+def test_vaccination_returns_intervention():
+    inter = vaccination(doses_per_day=50, window=(10, 30))
+    assert isinstance(inter, Intervention)
+    assert inter.start_day == 10
+    assert inter.end_day == 30
+
+
+def test_vaccination_default_uptake_is_full():
+    cfg = default_config()
+    rng = np.random.default_rng(0)
+    world = build_world(cfg, rng)
+    inter = vaccination(doses_per_day=100, window=(0, 5))
+    apply_interventions(world, cfg, day=2, interventions=[inter], rng=rng)
+    assert (world.state == DiseaseState.V).sum() == 100
+
+
+def test_vaccination_uptake_scales_effective_doses():
+    cfg = default_config()
+    rng = np.random.default_rng(0)
+    world = build_world(cfg, rng)
+    inter = vaccination(doses_per_day=100, window=(0, 5), uptake_rate=0.6)
+    apply_interventions(world, cfg, day=2, interventions=[inter], rng=rng)
+    # 100 doses × 0.6 uptake = 60 actually vaccinated
+    assert (world.state == DiseaseState.V).sum() == 60
+
+
+def test_vaccination_uptake_zero_no_one_vaccinated():
+    cfg = default_config()
+    rng = np.random.default_rng(0)
+    world = build_world(cfg, rng)
+    inter = vaccination(doses_per_day=100, window=(0, 5), uptake_rate=0.0)
+    apply_interventions(world, cfg, day=2, interventions=[inter], rng=rng)
+    assert (world.state == DiseaseState.V).sum() == 0
+
+
+def test_vaccination_with_distribution_returns_uncertain():
+    inter = vaccination(
+        doses_per_day=dist.uniform(40, 60),
+        window=(10, 30),
+    )
+    assert isinstance(inter, UncertainIntervention)
+
+
+def test_vaccination_uncertain_on_uptake():
+    inter = vaccination(
+        doses_per_day=50,
+        window=(10, 30),
+        uptake_rate=dist.beta(a=8, b=2),  # mean 0.8
+    )
+    assert isinstance(inter, UncertainIntervention)
+
+
+def test_run_comparison_with_vaccination():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 60})
+    hc = default_healthcare_config()
+    inter = vaccination(doses_per_day=10, window=(5, 50), uptake_rate=0.8)
+    result = run_comparison(
+        cfg, interventions=[inter], n_runs=2, base_seed=0,
+        initial_infected=5, parallel=False, healthcare=hc,
+    )
+    # Vaccination should reduce or at least not increase deaths
+    df = result.outcome_deltas()
+    assert "total_deaths" in df.index
