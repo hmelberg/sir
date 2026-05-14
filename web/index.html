@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Microfounded Epidemic Model</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --surface: #ffffff;
+      --border: #e7e5e4;
+      --text: #1c1917;
+      --muted: #57534e;
+      --accent: #1e40af;
+      --accent-soft: #dbeafe;
+      --s-color: #2563eb;
+      --i-color: #dc2626;
+      --r-color: #16a34a;
+      --theta-color: #7c3aed;
+      --e-color: #ea580c;
+      --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Source Serif 4', Georgia, serif;
+      font-size: 17px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .ui, button, input, select, label {
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .header-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+    }
+
+    .brand {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-weight: 600;
+      font-size: 1.05rem;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .brand .small {
+      color: var(--muted);
+      font-weight: 400;
+      font-size: 0.85rem;
+      margin-left: 0.4rem;
+    }
+
+    nav {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    nav button {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--muted);
+      padding: 0.45rem 0.9rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.1s, color 0.1s;
+    }
+
+    nav button:hover { background: var(--accent-soft); color: var(--accent); }
+    nav button.active { background: var(--accent); color: white; }
+
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 5rem;
+    }
+
+    main.wide { max-width: 1100px; }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    h1 {
+      font-family: 'Inter', sans-serif;
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.6rem;
+      line-height: 1.2;
+    }
+
+    h2 {
+      font-family: 'Inter', sans-serif;
+      font-size: 1.35rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin: 2.5rem 0 0.7rem;
+    }
+
+    h3 {
+      font-family: 'Inter', sans-serif;
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 1.5rem 0 0.4rem;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-style: italic;
+      margin-bottom: 2rem;
+    }
+
+    .lede {
+      font-size: 1.15rem;
+      line-height: 1.55;
+      color: #292524;
+      margin-bottom: 1.5rem;
+    }
+
+    p { margin: 0.8rem 0; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    ul, ol { padding-left: 1.4rem; }
+    li { margin-bottom: 0.3rem; }
+
+    code, .mono {
+      font-family: 'SF Mono', Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      background: #f5f5f4;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: 0.9rem;
+    }
+
+    .callout {
+      background: var(--accent-soft);
+      border-left: 3px solid var(--accent);
+      padding: 1rem 1.2rem;
+      border-radius: 4px;
+      margin: 1.5rem 0;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2rem 0;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      padding: 0.55rem 0.8rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      background: #f5f5f4;
+      font-size: 0.85rem;
+    }
+
+    /* Simulation page */
+
+    .sim-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 2rem;
+    }
+
+    @media (max-width: 800px) {
+      .sim-layout { grid-template-columns: 1fr; }
+    }
+
+    .controls {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      height: fit-content;
+      position: sticky;
+      top: 80px;
+    }
+
+    .controls h3 {
+      margin: 0 0 0.8rem;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+
+    .controls h3:not(:first-child) {
+      margin-top: 1.4rem;
+    }
+
+    .control {
+      margin-bottom: 0.7rem;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      color: var(--text);
+      margin-bottom: 0.2rem;
+    }
+
+    .control-label .value {
+      color: var(--accent);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .control input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .control-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.88rem;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+    }
+
+    .control-toggle input { accent-color: var(--accent); }
+
+    .run-btn {
+      width: 100%;
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.65rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 1rem;
+    }
+
+    .run-btn:hover { background: #1e3a8a; }
+    .run-btn:disabled { background: #a8a29e; cursor: not-allowed; }
+
+    .reset-btn {
+      width: 100%;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 0.5rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      margin-top: 0.4rem;
+    }
+
+    .reset-btn:hover { background: #f5f5f4; }
+
+    .status {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 0.8rem;
+      min-height: 1.2em;
+    }
+
+    .status.loading { color: var(--accent); }
+    .status.error { color: var(--i-color); }
+    .status.ready { color: var(--r-color); }
+
+    .results {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.75rem;
+    }
+
+    @media (max-width: 800px) {
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+    }
+
+    .summary-label {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      margin-bottom: 0.2rem;
+    }
+
+    .summary-value {
+      font-family: 'Inter', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .summary-value.small { font-size: 1.1rem; }
+
+    .plot-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .plot-card h4 {
+      margin: 0 0 0.5rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .plot {
+      height: 360px;
+    }
+
+    .plot-small { height: 240px; }
+
+    footer {
+      text-align: center;
+      padding: 2rem 1rem;
+      color: var(--muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border);
+      margin-top: 4rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <a href="#" class="brand">Microfounded SIR <span class="small">— interactive model</span></a>
+      <nav>
+        <button data-tab="brief" class="active">Brief</button>
+        <button data-tab="detailed">Detailed</button>
+        <button data-tab="simulation">Simulation</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ============================== BRIEF ============================== -->
+  <main id="page-brief" class="page active">
+    <h1>An epidemic model where behavior is a choice</h1>
+    <p class="subtitle">Reframing SIR so that disease spread depends on how often people meet, how much care they take, and the costs and benefits of doing so.</p>
+
+    <p class="lede">
+      The classical SIR model lumps everything about how a disease spreads into a single parameter, $\beta$. This makes it hard to reason about real-world interventions. School closures, mask mandates, and behavioral change all act on different parts of $\beta$ — but if $\beta$ is a single number, those distinctions disappear.
+    </p>
+
+    <p>
+      This model decomposes $\beta$ into two interpretable components:
+    </p>
+
+    <div class="callout">
+      $$\beta = m \cdot p$$
+      <p style="margin: 0.5rem 0 0; font-family: 'Inter', sans-serif; font-size: 0.9rem; color: var(--muted);">
+        where $m$ is the number of meetings per person per day and $p$ is the probability of transmission per meeting.
+      </p>
+    </div>
+
+    <p>
+      <strong>Interventions act on the components, not on $\beta$ directly.</strong> Cancelling soccer practice reduces $m$ for those who play. Mandating masks reduces $p$ everywhere people gather. Vaccination removes susceptibles. Each policy becomes a concrete adjustment to a specific parameter — and the model produces a welfare comparison across policies.
+    </p>
+
+    <p>
+      <strong>People also adjust on their own.</strong> When more people are sick, rational individuals reduce their meetings and take more precautions. This is built into the model as an optimization: each agent chooses contacts $\theta \in [0,1]$ and precaution effort $e \in [0,1]$ to maximize their flow utility net of expected infection cost.
+    </p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>What you can adjust</h3>
+        <ul style="margin: 0.5rem 0 0;">
+          <li>Meeting rate, transmission probability, recovery rate</li>
+          <li>Cost of getting infected and of taking precaution</li>
+          <li>Whether agents respond behaviorally or not</li>
+          <li>Mask-mandate interventions (when and how strong)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>What you see</h3>
+        <ul style="margin: 0.5rem 0 0;">
+          <li>Susceptible / infected / recovered curves</li>
+          <li>The behavioral response over time (meeting reduction, precaution effort)</li>
+          <li>Peak infected, attack rate, total welfare</li>
+        </ul>
+      </div>
+    </div>
+
+    <p>
+      Open the <a href="#" data-tab-link="simulation">Simulation</a> tab to experiment, or the <a href="#" data-tab-link="detailed">Detailed</a> tab for the full mathematical specification.
+    </p>
+  </main>
+
+  <!-- ============================ DETAILED ============================ -->
+  <main id="page-detailed" class="page">
+    <h1>Detailed model</h1>
+    <p class="subtitle">Full mathematical specification of the microfounded SIR model.</p>
+
+    <h2>1. Disease dynamics</h2>
+
+    <p>The population of size $N$ is partitioned into susceptible $S$, infected $I$, and recovered $R$. Discrete time steps of one day. The classical mass-action form is:</p>
+
+    $$\Delta S_t = -\beta\, \frac{S_t I_t}{N}, \qquad \Delta I_t = \beta\, \frac{S_t I_t}{N} - \gamma I_t, \qquad \Delta R_t = \gamma I_t$$
+
+    <p>where $\gamma$ is the recovery rate (so $1/\gamma$ is the mean infectious period).</p>
+
+    <p>The reformulation replaces $\beta$ with a contact-based microfoundation. For a susceptible agent, the daily infection probability is:</p>
+
+    $$\pi_t = 1 - (1 - p)^{\,m \cdot I_t / N}$$
+
+    <p>derived as follows: the agent has $m$ meetings; each is with an infected person with probability $I_t/N$; each such meeting transmits with probability $p$. So the probability of <em>escaping</em> infection across the expected $m \cdot I_t/N$ risky meetings is $(1-p)^{m\cdot I_t/N}$.</p>
+
+    <p>At low prevalence this reduces to $\pi_t \approx m p \cdot I_t/N$, which recovers mass-action with $\beta = mp$. The basic reproduction number is:</p>
+
+    $$\boxed{R_0 = \frac{m \cdot p}{\gamma}}$$
+
+    <h2>2. Microfounded behavioral response</h2>
+
+    <p>Each agent chooses a voluntary attendance multiplier $\theta \in [0, 1]$ (scaling baseline meetings $m_0$ to $\theta m_0$) and a precaution effort $e \in [0, 1]$ (reducing per-meeting transmission to $p(1-e)$). They maximize per-day flow utility:</p>
+
+    $$U(\theta, e \mid I/N) = \underbrace{\alpha \log(1 + \theta m_0)}_{\text{utility from meetings}} - \underbrace{\tfrac{1}{2} \kappa\, e^2}_{\text{cost of precaution}} - \underbrace{V \cdot \pi(\theta, e; I/N)}_{\text{expected infection cost}}$$
+
+    <p>where:</p>
+    <ul>
+      <li>$\alpha$ — utility weight on social attendance</li>
+      <li>$\kappa$ — quadratic cost of precaution effort</li>
+      <li>$V$ — total expected cost of being infected (suffering, mortality risk × VSL, sequelae)</li>
+      <li>$\pi$ — the per-period infection probability (linearized: $p(1-e) \cdot \theta m_0 \cdot I/N$)</li>
+    </ul>
+
+    <p>The agent's first-order conditions yield interior solutions:</p>
+
+    $$\frac{\alpha m_0}{1 + \theta m_0} = V (1 - e) \cdot m_0 p \cdot \frac{I}{N}, \qquad e = \frac{V \cdot \theta m_0 p \cdot I/N}{\kappa}$$
+
+    <p>Solved numerically. <strong>Rational expectations</strong>: agents observe true $I/N$, without lag or media bias. <strong>Atomism</strong>: each agent takes $I/N$ as exogenous — the gap between private and social optimum is the externality that justifies policy intervention.</p>
+
+    <h2>3. Interventions</h2>
+
+    <p>Four classes of intervention map onto the model's components:</p>
+
+    <table>
+      <thead><tr><th>Class</th><th>Acts on</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td>Avoidance (mandatory)</td><td>$m_0 \to f \cdot m_0$</td><td>School closure, gathering limits</td></tr>
+        <tr><td>Precaution (mandatory)</td><td>$p \to f \cdot p$</td><td>Mask mandate, ventilation rules</td></tr>
+        <tr><td>Remove infectious</td><td>$I \to (1-q) \cdot I$</td><td>Testing and isolation</td></tr>
+        <tr><td>Remove susceptibles</td><td>$S \to S - \dot{V}_t$</td><td>Vaccination</td></tr>
+      </tbody>
+    </table>
+
+    <p>Policy changes shift the constraint set; rational agents re-optimize given the new constraints. <strong>Risk compensation</strong> emerges naturally: if a mask mandate lowers $p$, optimal $\theta^*$ rises slightly (people feel safer, gather more) — a comparative-statics result, not an extra assumption.</p>
+
+    <h2>4. Welfare accounting</h2>
+
+    <p>Aggregate welfare under intervention scenario $\xi$:</p>
+
+    $$W(\xi) = \sum_{t=0}^{T} \sum_{i=1}^{N} U_{i,t}(\xi) - \sum_t \text{policy\_cost}(\xi, t)$$
+
+    <p>The cost-benefit of intervention $\xi$ vs. baseline is simply $\Delta W = W(\xi) - W(0)$. The total decomposes into six interpretable components:</p>
+
+    <table>
+      <thead><tr><th>Component</th><th>Source</th><th>Sign</th></tr></thead>
+      <tbody>
+        <tr><td>Attendance utility</td><td>$\alpha \log(1 + \theta m_0)$ summed</td><td>+</td></tr>
+        <tr><td>Precaution cost</td><td>$\tfrac{1}{2} \kappa e^2$ summed</td><td>−</td></tr>
+        <tr><td>Infection cost</td><td>$V \cdot$ (new infections)</td><td>−</td></tr>
+        <tr><td>Vaccination cost</td><td>$c_{\text{vax}} \cdot$ (new vaccinees)</td><td>−</td></tr>
+        <tr><td>Direct policy cost</td><td>Admin, enforcement</td><td>−</td></tr>
+        <tr><td>Spillover policy cost</td><td>e.g., learning loss from closed schools</td><td>−</td></tr>
+      </tbody>
+    </table>
+
+    <h2>5. Contact structure (full model)</h2>
+
+    <p>The simulation in this page uses a <strong>single composite group</strong> with mean-field mixing for tractability. The full ABM in the underlying Python package extends this with a <strong>bipartite agent–group structure</strong> across seven group types:</p>
+
+    <table>
+      <thead><tr><th>Type</th><th>Structure</th><th>Source of structure</th></tr></thead>
+      <tbody>
+        <tr><td>Household</td><td>Small (1–6), fully connected, daily</td><td>Census composition</td></tr>
+        <tr><td>Kin (linked households)</td><td>Cross-household low-frequency mixing</td><td>Survey data on extended family contact</td></tr>
+        <tr><td>School</td><td>~300–1000 members, age-grouped</td><td>Enrollment data</td></tr>
+        <tr><td>Workplace</td><td>~10–500, well-mixed within</td><td>Firm-size distribution</td></tr>
+        <tr><td>Recurring leisure</td><td>~10–50 (gyms, choirs, clubs)</td><td>Time-use surveys</td></tr>
+        <tr><td>One-off events</td><td>Ephemeral (weddings, concerts)</td><td>Event scheduling</td></tr>
+        <tr><td>Community</td><td>Age × neighborhood random mixing</td><td>POLYMOD contact matrices</td></tr>
+      </tbody>
+    </table>
+
+    <p>This decomposition lets interventions target specific layers: <em>close schools</em> shuts off transmission in just the school layer; <em>WFH mandate</em> scales workplace attendance; <em>bubble rules</em> restrict kin layer; etc.</p>
+
+    <h2>6. Probabilistic sensitivity analysis</h2>
+
+    <p>The full model supports PSA: each uncertain parameter is given a distribution (normal, lognormal, beta, triangular, or a 95% CI shorthand), drawn independently per outer iteration, with $n$ stochastic Monte Carlo runs per draw. Results are reported as medians and 95% confidence intervals on outcomes (welfare, peak infected, cumulative attack rate by age group), and as tornado plots of per-parameter rank correlation with each outcome.</p>
+
+    <h2>7. Scope and limitations</h2>
+
+    <ul>
+      <li><strong>Myopic optimization.</strong> Agents react to current $I/N$, not anticipated future paths. Misses pre-emption behavior at the start of waves.</li>
+      <li><strong>Rational expectations.</strong> Agents see true prevalence, not reported cases. Real populations over-react early and under-react late.</li>
+      <li><strong>No endogenous vaccination choice.</strong> Vaccination is policy-controlled.</li>
+      <li><strong>Single composite group in this page.</strong> The downloadable Python package implements the seven-layer bipartite structure.</li>
+      <li><strong>Generic respiratory pathogen.</strong> No specific pathogen calibration; parameters are illustrative.</li>
+    </ul>
+  </main>
+
+  <!-- =========================== SIMULATION =========================== -->
+  <main id="page-simulation" class="page wide">
+    <h1>Interactive simulation</h1>
+    <p class="subtitle">Adjust parameters on the left; results update automatically. The first run takes 5–10 s while Python loads in your browser.</p>
+
+    <div class="sim-layout">
+      <aside class="controls ui">
+        <h3>Disease</h3>
+
+        <div class="control">
+          <div class="control-label"><span>Population $N$</span><span class="value" id="val-N">10000</span></div>
+          <input type="range" id="ctl-N" min="1000" max="100000" step="1000" value="10000" />
+        </div>
+
+        <div class="control">
+          <div class="control-label"><span>Days $T$</span><span class="value" id="val-T">200</span></div>
+          <input type="range" id="ctl-T" min="30" max="720" step="10" value="200" />
+        </div>
+
+        <div class="control">
+          <div class="control-label"><span>Initial infected $I_0$</span><span class="value" id="val-I0">10</span></div>
+          <input type="range" id="ctl-I0" min="1" max="100" step="1" value="10" />
+        </div>
+
+        <div class="control">
+          <div class="control-label"><span>Meetings/day $m_0$</span><span class="value" id="val-m0">10</span></div>
+          <input type="range" id="ctl-m0" min="1" max="30" step="0.5" value="10" />
+        </div>
+
+        <div class="control">
+          <div class="control-label"><span>Per-meeting $p$</span><span class="value" id="val-p">0.040</span></div>
+          <input type="range" id="ctl-p" min="0.001" max="0.2" step="0.001" value="0.040" />
+        </div>
+
+        <div class="control">
+          <div class="control-label"><span>Recovery $\gamma$ (1/day)</span><span class="value" id="val-gamma">0.143</span></div>
+          <input type="range" id="ctl-gamma" min="0.05" max="0.5" step="0.005" value="0.143" />
+        </div>
+
+        <h3>Behavioral response</h3>
+
+        <label class="control-toggle">
+          <input type="checkbox" id="ctl-behavioral" checked />
+          Rational agents react to prevalence
+        </label>
+
+        <div class="control">
+          <div class="control-label"><span>Infection cost $V$</span><span class="value" id="val-V">30</span></div>
+          <input type="range" id="ctl-V" min="0" max="200" step="1" value="30" />
+        </div>
+
+        <div class="control">
+          <div class="control-label"><span>Meeting utility $\alpha$</span><span class="value" id="val-alpha">1.0</span></div>
+          <input type="range" id="ctl-alpha" min="0.1" max="3" step="0.05" value="1.0" />
+        </div>
+
+        <div class="control">
+          <div class="control-label"><span>Precaution cost $\kappa$</span><span class="value" id="val-kappa">1.0</span></div>
+          <input type="range" id="ctl-kappa" min="0.1" max="5" step="0.1" value="1.0" />
+        </div>
+
+        <h3>Intervention</h3>
+
+        <label class="control-toggle">
+          <input type="checkbox" id="ctl-int-on" />
+          Mask mandate (reduce $p$)
+        </label>
+
+        <div class="control">
+          <div class="control-label"><span>Start day</span><span class="value" id="val-istart">20</span></div>
+          <input type="range" id="ctl-istart" min="0" max="500" step="1" value="20" />
+        </div>
+
+        <div class="control">
+          <div class="control-label"><span>End day</span><span class="value" id="val-iend">120</span></div>
+          <input type="range" id="ctl-iend" min="10" max="600" step="1" value="120" />
+        </div>
+
+        <div class="control">
+          <div class="control-label"><span>Reduce $p$ to</span><span class="value" id="val-ifactor">0.50×</span></div>
+          <input type="range" id="ctl-ifactor" min="0.05" max="1.0" step="0.05" value="0.5" />
+        </div>
+
+        <button class="run-btn" id="run-btn" disabled>Loading Python…</button>
+        <button class="reset-btn" id="reset-btn">Reset to defaults</button>
+
+        <div class="status" id="status">Initializing…</div>
+      </aside>
+
+      <section class="results">
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-label">$R_0$</div>
+            <div class="summary-value" id="sum-r0">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Peak infected</div>
+            <div class="summary-value" id="sum-peak">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Final attack rate</div>
+            <div class="summary-value" id="sum-attack">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Net welfare</div>
+            <div class="summary-value small" id="sum-welfare">—</div>
+          </div>
+        </div>
+
+        <div class="plot-card">
+          <h4>Compartments over time</h4>
+          <div id="plot-sir" class="plot"></div>
+        </div>
+
+        <div class="plot-card">
+          <h4>Behavioral response over time</h4>
+          <div id="plot-behavior" class="plot plot-small"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    Built with Pyodide and Plotly. Full Python implementation (including the multi-group bipartite ABM, vaccination, PSA, and welfare decomposition) is in the underlying <code>sir</code> package.
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+  <script>
+    // ============================ Tab navigation ============================
+
+    const tabs = document.querySelectorAll('nav button');
+    const pages = document.querySelectorAll('main.page');
+
+    function activateTab(name) {
+      tabs.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+      pages.forEach(p => p.classList.toggle('active', p.id === `page-${name}`));
+      if (name === 'simulation') ensurePyodide();
+      window.scrollTo({ top: 0 });
+    }
+
+    tabs.forEach(b => b.addEventListener('click', () => activateTab(b.dataset.tab)));
+    document.querySelectorAll('[data-tab-link]').forEach(a => {
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        activateTab(a.dataset.tabLink);
+      });
+    });
+
+    // ============================ Slider plumbing ============================
+
+    const ids = ['N', 'T', 'I0', 'm0', 'p', 'gamma', 'V', 'alpha', 'kappa',
+                 'istart', 'iend', 'ifactor'];
+    const valEls = {};
+    const ctlEls = {};
+    for (const id of ids) {
+      valEls[id] = document.getElementById('val-' + id);
+      ctlEls[id] = document.getElementById('ctl-' + id);
+    }
+    const behavioralEl = document.getElementById('ctl-behavioral');
+    const intOnEl = document.getElementById('ctl-int-on');
+    const statusEl = document.getElementById('status');
+    const runBtn = document.getElementById('run-btn');
+    const resetBtn = document.getElementById('reset-btn');
+
+    function fmt(id, v) {
+      const num = parseFloat(v);
+      if (id === 'p') return num.toFixed(3);
+      if (id === 'gamma') return num.toFixed(3);
+      if (id === 'alpha' || id === 'kappa') return num.toFixed(2);
+      if (id === 'ifactor') return num.toFixed(2) + '×';
+      if (id === 'm0' && num % 1 !== 0) return num.toFixed(1);
+      return String(Math.round(num));
+    }
+
+    function updateLabels() {
+      for (const id of ids) valEls[id].textContent = fmt(id, ctlEls[id].value);
+      // R0 estimate
+      const m0 = parseFloat(ctlEls.m0.value);
+      const p = parseFloat(ctlEls.p.value);
+      const gamma = parseFloat(ctlEls.gamma.value);
+      const r0 = (m0 * p) / gamma;
+      document.getElementById('sum-r0').textContent = r0.toFixed(2);
+    }
+
+    let pendingRun = null;
+    function scheduleRun() {
+      updateLabels();
+      if (!pyodideReady) return;
+      if (pendingRun) clearTimeout(pendingRun);
+      pendingRun = setTimeout(() => { runSimulation(); }, 150);
+    }
+
+    for (const id of ids) ctlEls[id].addEventListener('input', scheduleRun);
+    behavioralEl.addEventListener('change', scheduleRun);
+    intOnEl.addEventListener('change', scheduleRun);
+    runBtn.addEventListener('click', runSimulation);
+
+    const defaults = {};
+    for (const id of ids) defaults[id] = ctlEls[id].value;
+    const defaultBehavioral = behavioralEl.checked;
+    const defaultIntOn = intOnEl.checked;
+
+    resetBtn.addEventListener('click', () => {
+      for (const id of ids) ctlEls[id].value = defaults[id];
+      behavioralEl.checked = defaultBehavioral;
+      intOnEl.checked = defaultIntOn;
+      scheduleRun();
+    });
+
+    updateLabels();
+
+    // ============================ Pyodide ============================
+
+    let pyodide = null;
+    let pyodideLoading = null;
+    let pyodideReady = false;
+
+    const SIM_CODE = `
+import numpy as np
+
+def _solve_foc(alpha, kappa, V, m0, p_eff, prev):
+    """Solve (theta*, e*) in [0,1]^2 for myopic agent."""
+    if V == 0 or prev == 0 or m0 == 0 or p_eff == 0:
+        return 1.0, 0.0
+    A = m0 * p_eff * prev  # exposure intensity
+    def foc(theta):
+        e_star = min(1.0, max(0.0, V * theta * A / kappa))
+        lhs = alpha * m0 / (1.0 + theta * m0)
+        rhs = V * (1.0 - e_star) * A
+        return lhs - rhs
+    f1 = foc(1.0)
+    f0 = foc(1e-6)
+    if f1 >= 0:
+        theta = 1.0
+    elif f0 <= 0:
+        theta = 1e-6
+    else:
+        lo, hi = 1e-6, 1.0
+        for _ in range(60):
+            mid = (lo + hi) / 2.0
+            if foc(mid) > 0:
+                lo = mid
+            else:
+                hi = mid
+        theta = (lo + hi) / 2.0
+    e_star = min(1.0, max(0.0, V * theta * A / kappa))
+    return float(theta), float(e_star)
+
+
+def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
+             behavioral, intervention_on, istart, iend, ifactor):
+    T = int(T)
+    N = float(N)
+    S = np.zeros(T + 1)
+    I = np.zeros(T + 1)
+    R = np.zeros(T + 1)
+    theta_h = np.zeros(T + 1)
+    e_h = np.zeros(T + 1)
+    new_inf_h = np.zeros(T + 1)
+    S[0] = N - I0
+    I[0] = I0
+
+    # Welfare accumulators
+    attendance_util = 0.0
+    precaution_cost = 0.0
+    infection_cost = 0.0
+
+    for t in range(T):
+        prev = I[t] / N
+        p_eff = p
+        if intervention_on and istart <= t < iend:
+            p_eff = p * ifactor
+        if behavioral:
+            theta, e = _solve_foc(alpha, kappa, V, m0, p_eff, prev)
+        else:
+            theta, e = 1.0, 0.0
+        m_eff = theta * m0
+        p_per_meeting = p_eff * (1.0 - e)
+        # Per-susceptible per-day infection probability
+        pi = 1.0 - (1.0 - p_per_meeting) ** (m_eff * prev) if (m_eff * prev) > 0 else 0.0
+        new_inf = pi * S[t]
+        new_rec = gamma * I[t]
+        S[t + 1] = S[t] - new_inf
+        I[t + 1] = I[t] + new_inf - new_rec
+        R[t + 1] = R[t] + new_rec
+        theta_h[t] = theta
+        e_h[t] = e
+        new_inf_h[t] = new_inf
+        # Welfare accumulation (per agent, summed across N)
+        # Approximation: everyone gets the same theta/e (mean-field rational)
+        attendance_util += N * alpha * np.log1p(m_eff)
+        precaution_cost += N * 0.5 * kappa * e * e
+        infection_cost += V * new_inf
+
+    theta_h[-1] = theta_h[-2] if T > 0 else 1.0
+    e_h[-1] = e_h[-2] if T > 0 else 0.0
+    new_inf_h[-1] = 0.0
+
+    welfare = attendance_util - precaution_cost - infection_cost
+    return {
+        "S": S.tolist(),
+        "I": I.tolist(),
+        "R": R.tolist(),
+        "theta": theta_h.tolist(),
+        "e": e_h.tolist(),
+        "new_inf": new_inf_h.tolist(),
+        "peak_I": float(I.max()),
+        "final_R": float(R[-1]),
+        "attendance_util": float(attendance_util),
+        "precaution_cost": float(precaution_cost),
+        "infection_cost": float(infection_cost),
+        "welfare": float(welfare),
+    }
+`;
+
+    async function ensurePyodide() {
+      if (pyodide || pyodideLoading) return pyodideLoading;
+      statusEl.textContent = 'Loading Python (numpy)…';
+      statusEl.className = 'status loading';
+      runBtn.textContent = 'Loading Python…';
+      runBtn.disabled = true;
+      pyodideLoading = (async () => {
+        try {
+          pyodide = await loadPyodide({
+            indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/'
+          });
+          statusEl.textContent = 'Loading numpy…';
+          await pyodide.loadPackage(['numpy']);
+          statusEl.textContent = 'Preparing model…';
+          await pyodide.runPythonAsync(SIM_CODE);
+          pyodideReady = true;
+          runBtn.textContent = 'Run simulation';
+          runBtn.disabled = false;
+          statusEl.textContent = 'Ready';
+          statusEl.className = 'status ready';
+          runSimulation();
+        } catch (err) {
+          statusEl.textContent = 'Failed to load Python: ' + err.message;
+          statusEl.className = 'status error';
+          throw err;
+        }
+      })();
+      return pyodideLoading;
+    }
+
+    // ============================ Run + plot ============================
+
+    function getInputs() {
+      const get = id => parseFloat(ctlEls[id].value);
+      return {
+        N: get('N'),
+        T: get('T'),
+        I0: get('I0'),
+        m0: get('m0'),
+        p: get('p'),
+        gamma: get('gamma'),
+        V: get('V'),
+        alpha: get('alpha'),
+        kappa: get('kappa'),
+        behavioral: behavioralEl.checked,
+        intervention_on: intOnEl.checked,
+        istart: get('istart'),
+        iend: get('iend'),
+        ifactor: get('ifactor'),
+      };
+    }
+
+    async function runSimulation() {
+      if (!pyodideReady) return;
+      const inp = getInputs();
+      pyodide.globals.set('_inp', pyodide.toPy(inp));
+      const startTime = performance.now();
+      let result;
+      try {
+        result = await pyodide.runPythonAsync(`
+import json
+r = simulate(
+    N=_inp['N'], T=_inp['T'], I0=_inp['I0'],
+    m0=_inp['m0'], p=_inp['p'], gamma=_inp['gamma'],
+    V=_inp['V'], alpha=_inp['alpha'], kappa=_inp['kappa'],
+    behavioral=_inp['behavioral'],
+    intervention_on=_inp['intervention_on'],
+    istart=_inp['istart'], iend=_inp['iend'], ifactor=_inp['ifactor'],
+)
+json.dumps(r)
+`);
+      } catch (err) {
+        statusEl.textContent = 'Simulation error: ' + err.message;
+        statusEl.className = 'status error';
+        return;
+      }
+      const data = JSON.parse(result);
+      const dt = performance.now() - startTime;
+      statusEl.textContent = `Run complete (${dt.toFixed(0)} ms)`;
+      statusEl.className = 'status ready';
+      renderResults(data, inp);
+    }
+
+    function renderResults(data, inp) {
+      const days = Array.from({ length: data.S.length }, (_, i) => i);
+
+      const intervBand = (inp.intervention_on && inp.istart < inp.iend) ? {
+        type: 'rect', xref: 'x', yref: 'paper',
+        x0: inp.istart, x1: inp.iend, y0: 0, y1: 1,
+        fillcolor: 'rgba(255, 165, 0, 0.10)', line: { width: 0 }
+      } : null;
+
+      // SIR plot
+      const sirData = [
+        { x: days, y: data.S, name: 'Susceptible', line: { color: getCSSVar('--s-color'), width: 2 } },
+        { x: days, y: data.I, name: 'Infected', line: { color: getCSSVar('--i-color'), width: 2 } },
+        { x: days, y: data.R, name: 'Recovered', line: { color: getCSSVar('--r-color'), width: 2 } },
+      ];
+      const sirLayout = {
+        margin: { l: 50, r: 20, t: 10, b: 40 },
+        xaxis: { title: 'Day', gridcolor: '#f0f0f0' },
+        yaxis: { title: 'People', gridcolor: '#f0f0f0', tickformat: ',d' },
+        legend: { orientation: 'h', y: 1.1 },
+        font: { family: 'Inter, sans-serif', size: 12 },
+        paper_bgcolor: 'white', plot_bgcolor: 'white',
+        shapes: intervBand ? [intervBand] : [],
+      };
+      Plotly.react('plot-sir', sirData, sirLayout, { responsive: true, displayModeBar: false });
+
+      // Behavior plot
+      const behData = [
+        { x: days, y: data.theta, name: 'θ (attendance)', line: { color: getCSSVar('--theta-color'), width: 2 }, yaxis: 'y' },
+        { x: days, y: data.e, name: 'e (precaution)', line: { color: getCSSVar('--e-color'), width: 2 }, yaxis: 'y' },
+      ];
+      const behLayout = {
+        margin: { l: 50, r: 20, t: 10, b: 40 },
+        xaxis: { title: 'Day', gridcolor: '#f0f0f0' },
+        yaxis: { title: 'Choice variable [0,1]', range: [0, 1.05], gridcolor: '#f0f0f0' },
+        legend: { orientation: 'h', y: 1.15 },
+        font: { family: 'Inter, sans-serif', size: 12 },
+        paper_bgcolor: 'white', plot_bgcolor: 'white',
+        shapes: intervBand ? [intervBand] : [],
+      };
+      Plotly.react('plot-behavior', behData, behLayout, { responsive: true, displayModeBar: false });
+
+      // Summary cards
+      document.getElementById('sum-peak').textContent = Math.round(data.peak_I).toLocaleString();
+      const attack = data.final_R / inp.N;
+      document.getElementById('sum-attack').textContent = (attack * 100).toFixed(1) + '%';
+      document.getElementById('sum-welfare').textContent = formatWelfare(data.welfare);
+    }
+
+    function formatWelfare(w) {
+      const a = Math.abs(w);
+      if (a >= 1e9) return (w / 1e9).toFixed(2) + 'B';
+      if (a >= 1e6) return (w / 1e6).toFixed(2) + 'M';
+      if (a >= 1e3) return (w / 1e3).toFixed(1) + 'k';
+      return w.toFixed(0);
+    }
+
+    function getCSSVar(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+  </script>
+</body>
+</html>
