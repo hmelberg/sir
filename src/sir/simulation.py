@@ -22,6 +22,7 @@ class SimResult:
     R_history: np.ndarray
     V_history: np.ndarray
     new_infections_history: np.ndarray
+    new_infections_by_age: np.ndarray
     welfare: WelfareLedger
     final_world: World
 
@@ -66,6 +67,7 @@ def simulate(
     R_hist = np.zeros(T + 1, dtype=np.int32)
     V_hist = np.zeros(T + 1, dtype=np.int32)
     new_inf_hist = np.zeros(T + 1, dtype=np.int32)
+    new_inf_by_age_hist = np.zeros((T + 1, 7), dtype=np.int32)
 
     def snapshot(t: int) -> None:
         S_hist[t] = int((world.state == DiseaseState.S).sum())
@@ -110,6 +112,10 @@ def simulate(
 
         # 8. Record new-infections count and snapshot
         new_inf_hist[t + 1] = int(new_infections.sum())
+        if new_infections.any():
+            new_inf_by_age_hist[t + 1] = np.bincount(
+                world.age_bin[new_infections], minlength=7
+            )
         snapshot(t + 1)
 
     return SimResult(
@@ -118,6 +124,7 @@ def simulate(
         R_history=R_hist,
         V_history=V_hist,
         new_infections_history=new_inf_hist,
+        new_infections_by_age=new_inf_by_age_hist,
         welfare=welfare,
         final_world=world,
     )

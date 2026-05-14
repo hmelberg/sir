@@ -52,3 +52,19 @@ def test_welfare_ledger_populated():
     result = simulate(cfg, interventions=[], rng=rng, initial_infected=10)
     assert result.welfare.totals["attendance_utility"] > 0
     assert len(result.welfare.by_day) == cfg.T
+
+
+def test_new_infections_by_age_shape():
+    cfg = default_config()
+    rng = np.random.default_rng(0)
+    result = simulate(cfg, interventions=[], rng=rng, initial_infected=10)
+    assert result.new_infections_by_age.shape == (cfg.T + 1, 7)
+
+
+def test_new_infections_by_age_sums_to_total():
+    cfg = default_config()
+    rng = np.random.default_rng(0)
+    result = simulate(cfg, interventions=[], rng=rng, initial_infected=10)
+    # Per-day sum across age bins should equal the scalar history
+    per_day_total = result.new_infections_by_age.sum(axis=1)
+    np.testing.assert_array_equal(per_day_total, result.new_infections_history)
