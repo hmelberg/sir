@@ -54,7 +54,7 @@ def main() -> None:
         print(f"Running scenario: {name}")
         results[name] = run_mc(
             cfg, interventions, n_runs=n_runs, base_seed=42,
-            initial_infected=10, parallel=False,
+            initial_infected=10,
         )
         print(f"  Mean welfare: {results[name].welfare_totals.mean():.1f}")
         print(f"  Mean peak I: {results[name].I_history.max(axis=1).mean():.0f}")

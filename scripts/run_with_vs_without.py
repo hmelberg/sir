@@ -43,7 +43,7 @@ def main() -> None:
     print("Running deterministic comparison...")
     result = run_comparison(
         cfg, interventions=interventions, n_runs=10, base_seed=0,
-        initial_infected=10, healthcare=hc, parallel=False,
+        initial_infected=10, healthcare=hc,
     )
     df = result.outcome_deltas()
     print("\nOutcome deltas (baseline vs treatment):")
@@ -83,7 +83,7 @@ def main() -> None:
     result_psa = run_comparison(
         cfg, interventions=interventions_psa,
         n_runs=5, n_psa_samples=10, base_seed=0,
-        initial_infected=10, healthcare=hc, parallel=False,
+        initial_infected=10, healthcare=hc,
     )
     df_psa = result_psa.outcome_deltas()
     print("\nOutcome deltas with PSA on intervention strength:")

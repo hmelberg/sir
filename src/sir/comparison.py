@@ -7,6 +7,7 @@ intervention-parameter uncertainty via PSA over distributions.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Callable, Sequence
 
 import numpy as np
@@ -15,7 +16,11 @@ import pandas as pd
 from sir.config import ScenarioConfig
 from sir.constants import GroupType
 from sir.healthcare import HealthcareConfig, HealthcareOutcomes
-from sir.interventions import Intervention
+from sir.interventions import (
+    Intervention,
+    _apply_set_p_mult,
+    _filter_group_type_in,
+)
 from sir.monte_carlo import MCResult, run_mc
 from sir.psa import ParameterDistribution
 
@@ -154,6 +159,17 @@ class UncertainIntervention:
 
 # ---------------- transmission_reduction ----------------
 
+def _build_transmission_reduction_from_resolved(
+    resolved: dict,
+    window: tuple[int, int],
+    targets: set[GroupType] | None,
+    direct_cost_per_day: float,
+) -> Intervention:
+    return _build_transmission_reduction(
+        resolved["p_factor"], window, targets, direct_cost_per_day,
+    )
+
+
 def transmission_reduction(
     p_factor,
     window: tuple[int, int],
@@ -167,12 +183,10 @@ def transmission_reduction(
     """
     if isinstance(p_factor, ParameterDistribution):
         params = {"p_factor": p_factor}
-
-        def builder(resolved):
-            return _build_transmission_reduction(
-                resolved["p_factor"], window, targets, direct_cost_per_day,
-            )
-
+        builder = partial(
+            _build_transmission_reduction_from_resolved,
+            window=window, targets=targets, direct_cost_per_day=direct_cost_per_day,
+        )
         return UncertainIntervention(name="transmission_reduction", builder=builder, params=params)
     return _build_transmission_reduction(p_factor, window, targets, direct_cost_per_day)
 
@@ -185,24 +199,30 @@ def _build_transmission_reduction(
         target_ints = np.array([int(gt) for gt in GroupType])
     else:
         target_ints = np.array([int(gt) for gt in targets])
-
-    def target_filter(world):
-        return np.isin(world.group_type, target_ints)
-
-    def apply(world, mask):
-        world.group_p_mult[mask] = p_factor
-
     return Intervention(
         name=f"transmission_reduction_{p_factor:.2f}",
         start_day=window[0],
         end_day=window[1],
-        target_filter=target_filter,
-        apply_to_groups=apply,
+        target_filter=partial(_filter_group_type_in, target_ints=target_ints),
+        apply_to_groups=partial(_apply_set_p_mult, factor=p_factor),
         direct_cost_per_day=direct_cost_per_day,
     )
 
 
 # ---------------- contact_reduction ----------------
+
+def _build_contact_reduction_from_resolved(
+    resolved: dict,
+    window: tuple[int, int],
+    target: GroupType | None,
+    spillover_cost_per_person_per_day: float,
+) -> Intervention:
+    return _build_contact_reduction(
+        resolved["people"], resolved["events_per_week"],
+        resolved["encounters_per_event"], window, target,
+        spillover_cost_per_person_per_day,
+    )
+
 
 def contact_reduction(
     people,
@@ -228,19 +248,36 @@ def contact_reduction(
             "events_per_week": events_per_week,
             "encounters_per_event": encounters_per_event,
         }
-
-        def builder(resolved):
-            return _build_contact_reduction(
-                resolved["people"], resolved["events_per_week"],
-                resolved["encounters_per_event"], window, target,
-                spillover_cost_per_person_per_day,
-            )
-
+        builder = partial(
+            _build_contact_reduction_from_resolved,
+            window=window, target=target,
+            spillover_cost_per_person_per_day=spillover_cost_per_person_per_day,
+        )
         return UncertainIntervention(name="contact_reduction", builder=builder, params=params)
     return _build_contact_reduction(
         people, events_per_week, encounters_per_event,
         window, target, spillover_cost_per_person_per_day,
     )
+
+
+def _apply_contact_reduction(
+    world, mask: np.ndarray, meetings_per_day: float
+) -> None:
+    if not mask.any() or meetings_per_day == 0.0:
+        return
+    target_groups = np.where(mask)[0]
+    in_target = np.isin(world.membership_group_id, target_groups)
+    baseline_target_meetings = float(in_target.sum())
+    if baseline_target_meetings == 0.0:
+        return
+    factor = max(0.0, 1.0 - meetings_per_day / baseline_target_meetings)
+    world.group_attendance_mult[mask] *= factor
+
+
+def _spillover_contact_reduction(
+    world, cfg: ScenarioConfig, cost_per_person_per_day: float, people: float
+) -> float:
+    return cost_per_person_per_day * people
 
 
 def _build_contact_reduction(
@@ -253,31 +290,20 @@ def _build_contact_reduction(
         target_ints = np.array([int(gt) for gt in GroupType])
     else:
         target_ints = np.array([int(target)])
-
-    def target_filter(world):
-        return np.isin(world.group_type, target_ints)
-
-    def apply(world, mask):
-        if not mask.any() or meetings_per_day == 0.0:
-            return
-        target_groups = np.where(mask)[0]
-        in_target = np.isin(world.membership_group_id, target_groups)
-        baseline_target_meetings = float(in_target.sum())
-        if baseline_target_meetings == 0.0:
-            return
-        factor = max(0.0, 1.0 - meetings_per_day / baseline_target_meetings)
-        world.group_attendance_mult[mask] *= factor
-
-    def spillover(world, cfg):
-        return spillover_cost_per_person_per_day * people
-
+    spillover_fn = None
+    if spillover_cost_per_person_per_day > 0:
+        spillover_fn = partial(
+            _spillover_contact_reduction,
+            cost_per_person_per_day=spillover_cost_per_person_per_day,
+            people=people,
+        )
     return Intervention(
         name=f"contact_reduction_{int(people)}x{events_per_week}x{encounters_per_event}",
         start_day=window[0],
         end_day=window[1],
-        target_filter=target_filter,
-        apply_to_groups=apply,
-        spillover_cost_fn=spillover if spillover_cost_per_person_per_day > 0 else None,
+        target_filter=partial(_filter_group_type_in, target_ints=target_ints),
+        apply_to_groups=partial(_apply_contact_reduction, meetings_per_day=meetings_per_day),
+        spillover_cost_fn=spillover_fn,
     )
 
 

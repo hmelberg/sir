@@ -5,9 +5,14 @@ during that window. Group-modifying interventions adjust group properties
 (active flag, attendance multiplier, transmission multiplier).
 Agent-action interventions move agents between disease states or apply
 direct utility costs (e.g., vaccination, mass testing).
+
+All callables stored on an Intervention are module-level functions or
+``functools.partial`` over module-level functions, so Intervention objects
+pickle cleanly for multiprocessing.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from functools import partial
 from typing import Callable, Iterable
 
 import numpy as np
@@ -32,49 +37,81 @@ class Intervention:
         return self.start_day <= day < self.end_day
 
 
+# ---------- Picklable building blocks (module-level functions) ----------
+
+
+def _filter_group_type_eq(world: World, group_type: int) -> np.ndarray:
+    return world.group_type == group_type
+
+
+def _filter_group_type_in(world: World, target_ints: np.ndarray) -> np.ndarray:
+    return np.isin(world.group_type, target_ints)
+
+
+def _filter_group_size_gt(world: World, max_size: int) -> np.ndarray:
+    return world.group_size > max_size
+
+
+def _apply_set_group_active(world: World, mask: np.ndarray, value: bool) -> None:
+    world.group_active[mask] = value
+
+
+def _apply_set_attendance_mult(world: World, mask: np.ndarray, factor: float) -> None:
+    world.group_attendance_mult[mask] = factor
+
+
+def _apply_set_p_mult(world: World, mask: np.ndarray, factor: float) -> None:
+    world.group_p_mult[mask] = factor
+
+
+def _spillover_school_closure(world: World, cfg: ScenarioConfig) -> float:
+    """Learning loss per kid per day × number of kids in closed schools."""
+    school_mask = world.group_type == GroupType.SCHOOL
+    closed_schools = np.where(school_mask & ~world.group_active)[0]
+    if closed_schools.size == 0:
+        return 0.0
+    in_closed = np.isin(world.membership_group_id, closed_schools)
+    affected_agents = np.unique(world.membership_agent_id[in_closed])
+    return cfg.learning_loss_per_kid_per_day * affected_agents.size
+
+
+def _action_vaccinate_eldest_first(
+    world: World, cfg: ScenarioConfig, rng: np.random.Generator, doses_per_day: int
+) -> np.ndarray:
+    new_vax = np.zeros(world.N, dtype=bool)
+    eligible = (world.state == DiseaseState.S) & ~world.vaccinated
+    if not eligible.any():
+        return new_vax
+    eligible_idx = np.where(eligible)[0]
+    order = np.argsort(-world.age[eligible_idx])
+    chosen = eligible_idx[order[:doses_per_day]]
+    world.state[chosen] = DiseaseState.V
+    world.vaccinated[chosen] = True
+    new_vax[chosen] = True
+    return new_vax
+
+
 # ---------- Standard group-modifying interventions ----------
 
 
 def close_schools(start_day: int, end_day: int) -> Intervention:
-    def target(world: World) -> np.ndarray:
-        return world.group_type == GroupType.SCHOOL
-
-    def apply(world: World, target_mask: np.ndarray) -> None:
-        world.group_active[target_mask] = False
-
-    def spillover(world: World, cfg: ScenarioConfig) -> float:
-        # Cost = learning_loss_per_kid_per_day * number of kids whose schools are closed
-        school_mask = world.group_type == GroupType.SCHOOL
-        closed_schools = np.where(school_mask & ~world.group_active)[0]
-        if closed_schools.size == 0:
-            return 0.0
-        in_closed = np.isin(world.membership_group_id, closed_schools)
-        affected_agents = np.unique(world.membership_agent_id[in_closed])
-        return cfg.learning_loss_per_kid_per_day * affected_agents.size
-
     return Intervention(
         name="close_schools",
         start_day=start_day,
         end_day=end_day,
-        target_filter=target,
-        apply_to_groups=apply,
-        spillover_cost_fn=spillover,
+        target_filter=partial(_filter_group_type_eq, group_type=int(GroupType.SCHOOL)),
+        apply_to_groups=partial(_apply_set_group_active, value=False),
+        spillover_cost_fn=_spillover_school_closure,
     )
 
 
 def wfh_mandate(start_day: int, end_day: int, attendance_factor: float) -> Intervention:
-    def target(world: World) -> np.ndarray:
-        return world.group_type == GroupType.WORKPLACE
-
-    def apply(world: World, target_mask: np.ndarray) -> None:
-        world.group_attendance_mult[target_mask] = attendance_factor
-
     return Intervention(
         name="wfh_mandate",
         start_day=start_day,
         end_day=end_day,
-        target_filter=target,
-        apply_to_groups=apply,
+        target_filter=partial(_filter_group_type_eq, group_type=int(GroupType.WORKPLACE)),
+        apply_to_groups=partial(_apply_set_attendance_mult, factor=attendance_factor),
     )
 
 
@@ -85,52 +122,32 @@ def mask_mandate(
     p_factor: float,
 ) -> Intervention:
     target_ints = np.array([int(gt) for gt in target_types])
-
-    def target(world: World) -> np.ndarray:
-        return np.isin(world.group_type, target_ints)
-
-    def apply(world: World, target_mask: np.ndarray) -> None:
-        world.group_p_mult[target_mask] = p_factor
-
     return Intervention(
         name="mask_mandate",
         start_day=start_day,
         end_day=end_day,
-        target_filter=target,
-        apply_to_groups=apply,
+        target_filter=partial(_filter_group_type_in, target_ints=target_ints),
+        apply_to_groups=partial(_apply_set_p_mult, factor=p_factor),
     )
 
 
 def gathering_limit(start_day: int, end_day: int, max_size: int) -> Intervention:
-    def target(world: World) -> np.ndarray:
-        # Affects any group with size > max_size
-        return world.group_size > max_size
-
-    def apply(world: World, target_mask: np.ndarray) -> None:
-        world.group_attendance_mult[target_mask] = 0.1
-
     return Intervention(
         name=f"gathering_limit_{max_size}",
         start_day=start_day,
         end_day=end_day,
-        target_filter=target,
-        apply_to_groups=apply,
+        target_filter=partial(_filter_group_size_gt, max_size=max_size),
+        apply_to_groups=partial(_apply_set_attendance_mult, factor=0.1),
     )
 
 
 def event_ban(start_day: int, end_day: int) -> Intervention:
-    def target(world: World) -> np.ndarray:
-        return world.group_type == GroupType.ONE_OFF_EVENT
-
-    def apply(world: World, target_mask: np.ndarray) -> None:
-        world.group_active[target_mask] = False
-
     return Intervention(
         name="event_ban",
         start_day=start_day,
         end_day=end_day,
-        target_filter=target,
-        apply_to_groups=apply,
+        target_filter=partial(_filter_group_type_eq, group_type=int(GroupType.ONE_OFF_EVENT)),
+        apply_to_groups=partial(_apply_set_group_active, value=False),
     )
 
 
@@ -140,25 +157,11 @@ def event_ban(start_day: int, end_day: int) -> Intervention:
 def vaccinate_eldest_first(
     start_day: int, end_day: int, doses_per_day: int
 ) -> Intervention:
-    def action(world: World, cfg: ScenarioConfig, rng: np.random.Generator) -> np.ndarray:
-        new_vax = np.zeros(world.N, dtype=bool)
-        eligible = (world.state == DiseaseState.S) & ~world.vaccinated
-        if not eligible.any():
-            return new_vax
-        eligible_idx = np.where(eligible)[0]
-        # Sort by age descending
-        order = np.argsort(-world.age[eligible_idx])
-        chosen = eligible_idx[order[:doses_per_day]]
-        world.state[chosen] = DiseaseState.V
-        world.vaccinated[chosen] = True
-        new_vax[chosen] = True
-        return new_vax
-
     return Intervention(
         name="vaccinate_eldest_first",
         start_day=start_day,
         end_day=end_day,
-        agent_action=action,
+        agent_action=partial(_action_vaccinate_eldest_first, doses_per_day=doses_per_day),
         direct_cost_per_day=doses_per_day * 0.001,
     )
 
