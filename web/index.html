@@ -435,11 +435,15 @@
 
     .summary-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 0.75rem;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.6rem;
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 1100px) {
+      .summary-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @media (max-width: 800px) {
       .summary-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
@@ -915,6 +919,32 @@
           <input type="range" id="ctl-iculos" min="1" max="45" step="1" value="10" />
         </div>
 
+        <h3>Mortality</h3>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Death rate IFR (% of infections) <span class="info" data-tip="Infection fatality ratio: fraction of infected people who die. Strongly age-dependent: COVID ≈ 0.05% for <50, ≈ 5% for 75+, ≈ 0.5–1% overall in mixed-age populations.">?</span></span>
+            <span class="value" id="val-deathrate">0.5%</span>
+          </div>
+          <input type="range" id="ctl-deathrate" min="0.01" max="5" step="0.01" value="0.5" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Days infection → death <span class="info" data-tip="Mean lag from infection to death. Includes incubation, illness progression, hospitalization, ICU stay. Typical: 15–25 days.">?</span></span>
+            <span class="value" id="val-deathdelay">18</span>
+          </div>
+          <input type="range" id="ctl-deathdelay" min="3" max="60" step="1" value="18" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Years of life lost per death <span class="info" data-tip="Average years of life expectancy lost per death. For respiratory pathogens with elderly-skewed mortality (COVID-like), typically 8–12 years. For pathogens that kill younger people, much higher (30+).">?</span></span>
+            <span class="value" id="val-yllpd">10</span>
+          </div>
+          <input type="range" id="ctl-yllpd" min="1" max="50" step="0.5" value="10" />
+        </div>
+
         <button class="run-btn" id="run-btn" disabled>Loading Python…</button>
         <button class="reset-btn" id="reset-btn">Reset to defaults</button>
 
@@ -945,6 +975,14 @@
             <div class="summary-value compare" id="sum-icu">—</div>
           </div>
           <div class="summary-card">
+            <div class="summary-label">Total deaths</div>
+            <div class="summary-value compare" id="sum-deaths">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Total life-years lost</div>
+            <div class="summary-value compare" id="sum-yll">—</div>
+          </div>
+          <div class="summary-card">
             <div class="summary-label">Net welfare</div>
             <div class="summary-value compare" id="sum-welfare">—</div>
           </div>
@@ -969,6 +1007,10 @@
                 <optgroup label="ICU">
                   <option value="icu_prev">ICU occupancy (beds in use)</option>
                   <option value="icu_admit">ICU admissions per day</option>
+                </optgroup>
+                <optgroup label="Mortality">
+                  <option value="cum_deaths">Cumulative deaths</option>
+                  <option value="daily_deaths">Deaths per day</option>
                 </optgroup>
               </select>
             </div>
@@ -1146,7 +1188,8 @@
     const ids = ['N', 'T', 'I0', 'm0', 'p', 'gamma', 'V', 'alpha', 'kappa',
                  'istart', 'iend', 'ifactor',
                  'cx', 'cy', 'cz', 'cstart', 'cend',
-                 'hosprate', 'icurate', 'hospdelay', 'icudelay', 'hosplos', 'iculos'];
+                 'hosprate', 'icurate', 'hospdelay', 'icudelay', 'hosplos', 'iculos',
+                 'deathrate', 'deathdelay', 'yllpd'];
     const valEls = {};
     const ctlEls = {};
     for (const id of ids) {
@@ -1183,6 +1226,8 @@
       if (id === 'cy') return num.toFixed(1);
       if (id === 'hosprate') return num.toFixed(1) + '%';
       if (id === 'icurate') return num.toFixed(2) + '%';
+      if (id === 'deathrate') return num.toFixed(2) + '%';
+      if (id === 'yllpd') return num.toFixed(1);
       if ((id === 'm0' || id === 'cx') && num % 1 !== 0) return num.toFixed(1);
       return String(Math.round(num));
     }
@@ -1298,7 +1343,8 @@ def _solve_foc(alpha, kappa, V, m0, p_eff, prev):
 def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
              behavioral, intervention_on, istart, iend, ifactor,
              contact_on, cstart, cend, cx, cy, cz,
-             hosp_rate, icu_rate, hosp_delay, icu_delay, hosp_los, icu_los):
+             hosp_rate, icu_rate, hosp_delay, icu_delay, hosp_los, icu_los,
+             death_rate, death_delay, yll_per_death):
     T = int(T)
     N = float(N)
     S = np.zeros(T + 1)
@@ -1379,7 +1425,6 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
             hosp_admit[t] = hosp_rate * new_inf_h[t - hd]
         if t - ud >= 0:
             icu_admit[t] = icu_rate * new_inf_h[t - ud]
-    # Prevalence = sum of admissions in last LOS days
     hosp_prev = np.zeros(T + 1)
     icu_prev = np.zeros(T + 1)
     for t in range(T + 1):
@@ -1387,6 +1432,16 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
         hosp_prev[t] = hosp_admit[lo:t + 1].sum()
         lo2 = max(0, t - ul + 1)
         icu_prev[t] = icu_admit[lo2:t + 1].sum()
+
+    # Mortality: deaths lag new infections; daily incidence and cumulative
+    dd = int(death_delay)
+    daily_deaths = np.zeros(T + 1)
+    for t in range(T + 1):
+        if t - dd >= 0:
+            daily_deaths[t] = death_rate * new_inf_h[t - dd]
+    cum_deaths = np.cumsum(daily_deaths)
+    total_deaths = float(cum_deaths[-1])
+    total_yll = total_deaths * yll_per_death
 
     welfare = attendance_util - precaution_cost - infection_cost
     return {
@@ -1401,9 +1456,13 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
         "hosp_prev": hosp_prev.tolist(),
         "icu_admit": icu_admit.tolist(),
         "icu_prev": icu_prev.tolist(),
+        "daily_deaths": daily_deaths.tolist(),
+        "cum_deaths": cum_deaths.tolist(),
         "peak_I": float(I.max()),
         "peak_hosp_prev": float(hosp_prev.max()),
         "peak_icu_prev": float(icu_prev.max()),
+        "total_deaths": total_deaths,
+        "total_yll": float(total_yll),
         "final_R": float(R[-1]),
         "attendance_util": float(attendance_util),
         "precaution_cost": float(precaution_cost),
@@ -1482,6 +1541,9 @@ def simulate_pair(**kw):
         icu_delay: get('icudelay'),
         hosp_los: get('hosplos'),
         icu_los: get('iculos'),
+        death_rate: get('deathrate') / 100,
+        death_delay: get('deathdelay'),
+        yll_per_death: get('yllpd'),
       };
     }
 
@@ -1507,6 +1569,8 @@ r = simulate_pair(
     hosp_rate=_inp['hosp_rate'], icu_rate=_inp['icu_rate'],
     hosp_delay=_inp['hosp_delay'], icu_delay=_inp['icu_delay'],
     hosp_los=_inp['hosp_los'], icu_los=_inp['icu_los'],
+    death_rate=_inp['death_rate'], death_delay=_inp['death_delay'],
+    yll_per_death=_inp['yll_per_death'],
 )
 json.dumps(r)
 `);
@@ -1536,6 +1600,8 @@ json.dumps(r)
       hosp_admit: { label: 'Hospital admissions per day',  ytitle: 'Admissions / day',        fmt: ',.1f' },
       icu_prev:   { label: 'ICU occupancy',                ytitle: 'ICU beds in use',         fmt: ',d' },
       icu_admit:  { label: 'ICU admissions per day',       ytitle: 'ICU admissions / day',    fmt: ',.1f' },
+      cum_deaths: { label: 'Cumulative deaths',            ytitle: 'Deaths',                  fmt: ',d' },
+      daily_deaths:{ label: 'Deaths per day',              ytitle: 'Deaths / day',            fmt: ',.1f' },
     };
 
     function bandsForInp(inp) {
@@ -1645,6 +1711,8 @@ json.dumps(r)
       setCompareCard('sum-attack', w.final_R / N, wo.final_R / N, v => (v * 100).toFixed(1) + '%', true);
       setCompareCard('sum-hosp', w.peak_hosp_prev, wo.peak_hosp_prev, v => Math.round(v).toLocaleString(), true);
       setCompareCard('sum-icu', w.peak_icu_prev, wo.peak_icu_prev, v => Math.round(v).toLocaleString(), true);
+      setCompareCard('sum-deaths', w.total_deaths, wo.total_deaths, v => Math.round(v).toLocaleString(), true);
+      setCompareCard('sum-yll', w.total_yll, wo.total_yll, v => Math.round(v).toLocaleString() + ' yr', true);
       setCompareCard('sum-welfare', w.welfare, wo.welfare, formatWelfare, false);
     }
 
