@@ -139,6 +139,30 @@ def compute_vaccination_program(
     return float(discounted.sum()), discounted
 
 
+def compute_productivity_illness(
+    new_inf_by_age: np.ndarray,
+    hosp_rate_by_age: tuple[float, ...],
+    icu_rate_by_age: tuple[float, ...],
+    cfg: CBAConfig,
+    discount_rate: float,
+) -> tuple[float, np.ndarray]:
+    """Stream 3: Lost productivity from non-fatal illness."""
+    T = new_inf_by_age.shape[0]
+    wage = np.asarray(cfg.wage_per_day_by_age, dtype=np.float64)
+    hr = np.asarray(hosp_rate_by_age, dtype=np.float64)
+    ir = np.asarray(icu_rate_by_age, dtype=np.float64)
+    days_per_case = (
+        cfg.sick_days_per_infection
+        + hr * cfg.sick_days_hospitalized
+        + ir * cfg.sick_days_icu
+    )
+    loss_per_case = days_per_case * wage
+    raw = new_inf_by_age @ loss_per_case
+    factors = discount_factors(discount_rate, T)
+    discounted = raw * factors
+    return float(discounted.sum()), discounted
+
+
 @dataclass
 class CBAReport:
     streams: dict[str, float]

@@ -175,3 +175,37 @@ def test_vaccination_program_discounts():
     total_disc, _ = compute_vaccination_program(new_vax_by_age, cfg, discount_rate=0.03)
     total_undisc, _ = compute_vaccination_program(new_vax_by_age, cfg, discount_rate=0.0)
     assert total_disc < total_undisc
+
+
+from sir.cba import compute_productivity_illness
+
+
+def test_productivity_illness_zero_when_no_infections():
+    new_inf_by_age = np.zeros((10, 7))
+    hc_rates = (0.02,) * 7
+    icu_rates = (0.004,) * 7
+    cfg = default_cba_config()
+    total, _ = compute_productivity_illness(new_inf_by_age, hc_rates, icu_rates, cfg, discount_rate=0.0)
+    assert total == 0.0
+
+
+def test_productivity_illness_uses_wage_by_age():
+    new_inf_by_age = np.zeros((2, 7))
+    new_inf_by_age[0, 3] = 10
+    hc_rates = (0.0,) * 7
+    icu_rates = (0.0,) * 7
+    cfg = default_cba_config()
+    # 10 cases × 7 sick days × $250 wage (age 3) = $17500
+    total, per_day = compute_productivity_illness(new_inf_by_age, hc_rates, icu_rates, cfg, discount_rate=0.0)
+    assert np.isclose(per_day[0], 17500.0)
+
+
+def test_productivity_illness_adds_hospital_and_icu_days():
+    new_inf_by_age = np.zeros((2, 7))
+    new_inf_by_age[0, 3] = 1
+    hc_rates = (1.0,) * 7
+    icu_rates = (1.0,) * 7
+    cfg = default_cba_config()
+    # 7 + 14 + 21 = 42 days × $250 = $10500
+    total, _ = compute_productivity_illness(new_inf_by_age, hc_rates, icu_rates, cfg, discount_rate=0.0)
+    assert np.isclose(total, 10500.0)
