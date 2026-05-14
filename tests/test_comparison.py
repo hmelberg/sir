@@ -217,3 +217,39 @@ def test_uncertain_intervention_samples_are_reproducible():
     for s1, s2 in zip(r1.intervention_samples, r2.intervention_samples):
         for k in s1:
             assert s1[k] == s2[k]
+
+
+import pandas as pd
+
+
+def test_outcome_deltas_returns_dataframe():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 30})
+    hc = default_healthcare_config()
+    inter = transmission_reduction(p_factor=0.5, window=(5, 25))
+    result = run_comparison(
+        cfg, interventions=[inter], n_runs=2, base_seed=0,
+        initial_infected=5, parallel=False, healthcare=hc,
+    )
+    df = result.outcome_deltas()
+    assert isinstance(df, pd.DataFrame)
+    expected_cols = {"baseline", "treatment", "delta", "delta_pct", "ci_lo", "ci_hi"}
+    assert expected_cols.issubset(df.columns)
+    expected_outcomes = {
+        "peak_I", "final_attack_rate", "welfare",
+        "total_deaths", "total_yll", "peak_hosp_prev", "peak_icu_prev",
+    }
+    assert expected_outcomes.issubset(set(df.index))
+
+
+def test_outcome_deltas_without_healthcare_omits_healthcare_outcomes():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 30})
+    result = run_comparison(
+        cfg, interventions=[], n_runs=2, base_seed=0,
+        initial_infected=5, parallel=False,
+    )
+    df = result.outcome_deltas()
+    # Health outcomes should NOT be in the table when healthcare is None
+    assert "total_deaths" not in df.index
+    assert "peak_I" in df.index

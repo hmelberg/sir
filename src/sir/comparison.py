@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
 import numpy as np
+import pandas as pd
 
 from sir.config import ScenarioConfig
 from sir.constants import GroupType
@@ -28,6 +29,102 @@ class ComparisonResult:
     baseline_healthcare: list[list[HealthcareOutcomes]] | None
     treatment_healthcare: list[list[HealthcareOutcomes]] | None
     intervention_samples: list[dict[str, float]] | None
+
+    def outcome_deltas(self) -> "pd.DataFrame":
+        """Tidy DataFrame of with-vs-without deltas across PSA samples and MC runs.
+
+        Rows: outcomes (peak_I, final_attack_rate, welfare, and healthcare outcomes
+        if available). Columns: baseline (mean), treatment (mean), delta, delta_pct,
+        ci_lo, ci_hi (95% interval).
+        """
+        rows = []
+
+        def _add(name, base_vals, treat_vals):
+            base_arr = np.asarray(base_vals, dtype=float)
+            treat_arr = np.asarray(treat_vals, dtype=float)
+            delta = treat_arr - base_arr
+            base_mean = float(base_arr.mean())
+            treat_mean = float(treat_arr.mean())
+            delta_mean = float(delta.mean())
+            delta_pct = (delta_mean / base_mean * 100) if base_mean != 0 else float("nan")
+            ci_lo = float(np.percentile(delta, 2.5)) if delta.size > 1 else delta_mean
+            ci_hi = float(np.percentile(delta, 97.5)) if delta.size > 1 else delta_mean
+            rows.append({
+                "outcome": name,
+                "baseline": base_mean,
+                "treatment": treat_mean,
+                "delta": delta_mean,
+                "delta_pct": delta_pct,
+                "ci_lo": ci_lo,
+                "ci_hi": ci_hi,
+            })
+
+        # Disease outcomes
+        b_peak = np.concatenate([r.I_history.max(axis=1) for r in self.baseline_results])
+        t_peak = np.concatenate([r.I_history.max(axis=1) for r in self.treatment_results])
+        _add("peak_I", b_peak, t_peak)
+
+        N = float(self.cfg.N) if self.cfg is not None else 1.0
+        b_ar = np.concatenate([r.R_history[:, -1] / N for r in self.baseline_results])
+        t_ar = np.concatenate([r.R_history[:, -1] / N for r in self.treatment_results])
+        _add("final_attack_rate", b_ar, t_ar)
+
+        b_w = np.concatenate([r.welfare_totals for r in self.baseline_results])
+        t_w = np.concatenate([r.welfare_totals for r in self.treatment_results])
+        _add("welfare", b_w, t_w)
+
+        # Healthcare outcomes if available
+        if self.baseline_healthcare is not None:
+            b_d = np.array([
+                hc.total_deaths
+                for psa_runs in self.baseline_healthcare
+                for hc in psa_runs
+            ])
+            t_d = np.array([
+                hc.total_deaths
+                for psa_runs in self.treatment_healthcare
+                for hc in psa_runs
+            ])
+            _add("total_deaths", b_d, t_d)
+
+            b_yll = np.array([
+                hc.total_yll
+                for psa_runs in self.baseline_healthcare
+                for hc in psa_runs
+            ])
+            t_yll = np.array([
+                hc.total_yll
+                for psa_runs in self.treatment_healthcare
+                for hc in psa_runs
+            ])
+            _add("total_yll", b_yll, t_yll)
+
+            b_hp = np.array([
+                hc.hosp_prev.max()
+                for psa_runs in self.baseline_healthcare
+                for hc in psa_runs
+            ])
+            t_hp = np.array([
+                hc.hosp_prev.max()
+                for psa_runs in self.treatment_healthcare
+                for hc in psa_runs
+            ])
+            _add("peak_hosp_prev", b_hp, t_hp)
+
+            b_ip = np.array([
+                hc.icu_prev.max()
+                for psa_runs in self.baseline_healthcare
+                for hc in psa_runs
+            ])
+            t_ip = np.array([
+                hc.icu_prev.max()
+                for psa_runs in self.treatment_healthcare
+                for hc in psa_runs
+            ])
+            _add("peak_icu_prev", b_ip, t_ip)
+
+        df = pd.DataFrame(rows).set_index("outcome")
+        return df
 
 
 @dataclass
