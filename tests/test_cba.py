@@ -209,3 +209,31 @@ def test_productivity_illness_adds_hospital_and_icu_days():
     # 7 + 14 + 21 = 42 days × $250 = $10500
     total, _ = compute_productivity_illness(new_inf_by_age, hc_rates, icu_rates, cfg, discount_rate=0.0)
     assert np.isclose(total, 10500.0)
+
+
+from sir.cba import compute_productivity_death
+
+
+def test_productivity_death_zero_when_no_deaths():
+    daily_deaths_by_age = np.zeros((10, 7))
+    cfg = default_cba_config()
+    total, _ = compute_productivity_death(daily_deaths_by_age, cfg, discount_rate=0.0)
+    assert total == 0.0
+
+
+def test_productivity_death_uses_remaining_working_years():
+    daily_deaths_by_age = np.zeros((2, 7))
+    daily_deaths_by_age[0, 3] = 1
+    cfg = default_cba_config()
+    # 1 × 25 yr × $250/day × 260 wd/yr = $1,625,000
+    total, per_day = compute_productivity_death(daily_deaths_by_age, cfg, discount_rate=0.0)
+    expected = 1 * 25.0 * 250.0 * 260.0
+    assert np.isclose(per_day[0], expected)
+
+
+def test_productivity_death_no_loss_for_post_retirement():
+    daily_deaths_by_age = np.zeros((2, 7))
+    daily_deaths_by_age[0, 6] = 100
+    cfg = default_cba_config()
+    total, _ = compute_productivity_death(daily_deaths_by_age, cfg, discount_rate=0.0)
+    assert total == 0.0

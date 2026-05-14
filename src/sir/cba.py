@@ -163,6 +163,25 @@ def compute_productivity_illness(
     return float(discounted.sum()), discounted
 
 
+WORKING_DAYS_PER_YEAR = 260
+
+
+def compute_productivity_death(
+    daily_deaths_by_age: np.ndarray,
+    cfg: CBAConfig,
+    discount_rate: float,
+) -> tuple[float, np.ndarray]:
+    """Stream 4: Lost productivity from death."""
+    T = daily_deaths_by_age.shape[0]
+    wage = np.asarray(cfg.wage_per_day_by_age, dtype=np.float64)
+    years = np.asarray(cfg.remaining_working_years_by_age, dtype=np.float64)
+    loss_per_death = years * wage * WORKING_DAYS_PER_YEAR
+    raw = daily_deaths_by_age @ loss_per_death
+    factors = discount_factors(discount_rate, T)
+    discounted = raw * factors
+    return float(discounted.sum()), discounted
+
+
 @dataclass
 class CBAReport:
     streams: dict[str, float]
