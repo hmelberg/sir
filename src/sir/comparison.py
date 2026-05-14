@@ -15,7 +15,7 @@ from sir.config import ScenarioConfig
 from sir.constants import GroupType
 from sir.healthcare import HealthcareConfig, HealthcareOutcomes
 from sir.interventions import Intervention
-from sir.monte_carlo import MCResult
+from sir.monte_carlo import MCResult, run_mc
 
 
 @dataclass
@@ -107,4 +107,45 @@ def contact_reduction(
         target_filter=target_filter,
         apply_to_groups=apply,
         spillover_cost_fn=spillover if spillover_cost_per_person_per_day > 0 else None,
+    )
+
+
+def run_comparison(
+    cfg: ScenarioConfig,
+    interventions: Sequence[Intervention],
+    n_runs: int,
+    n_psa_samples: int = 1,
+    base_seed: int = 0,
+    initial_infected: int = 10,
+    healthcare: HealthcareConfig | None = None,
+    parallel: bool = True,
+) -> ComparisonResult:
+    """Run baseline vs treatment, with optional PSA over uncertain intervention parameters.
+
+    For now (Task 9), treats all interventions as concrete (no uncertainty handling).
+    """
+    interventions_list = list(interventions)
+
+    baseline_mc = run_mc(
+        cfg, interventions=[], n_runs=n_runs, base_seed=base_seed,
+        initial_infected=initial_infected, parallel=parallel,
+        healthcare=healthcare,
+    )
+    treatment_mc = run_mc(
+        cfg, interventions=interventions_list, n_runs=n_runs, base_seed=base_seed,
+        initial_infected=initial_infected, parallel=parallel,
+        healthcare=healthcare,
+    )
+
+    baseline_hc = [baseline_mc.healthcare_outcomes] if healthcare is not None else None
+    treatment_hc = [treatment_mc.healthcare_outcomes] if healthcare is not None else None
+
+    return ComparisonResult(
+        cfg=cfg,
+        interventions_resolved=[interventions_list],
+        baseline_results=[baseline_mc],
+        treatment_results=[treatment_mc],
+        baseline_healthcare=baseline_hc,
+        treatment_healthcare=treatment_hc,
+        intervention_samples=None,
     )

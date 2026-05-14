@@ -120,3 +120,50 @@ def test_contact_reduction_zero_people_no_effect():
     )
     apply_interventions(world, cfg, day=5, interventions=[inter], rng=rng)
     assert np.allclose(world.group_attendance_mult, 1.0)
+
+
+from sir.comparison import run_comparison
+from sir.healthcare import default_healthcare_config
+
+
+def test_run_comparison_returns_result():
+    cfg = default_config()
+    # Make small for speed
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 30})
+    interventions = [transmission_reduction(p_factor=0.5, window=(5, 25))]
+    result = run_comparison(
+        cfg, interventions, n_runs=2, base_seed=0,
+        initial_infected=5, parallel=False,
+    )
+    assert len(result.baseline_results) == 1
+    assert len(result.treatment_results) == 1
+    assert result.baseline_results[0].I_history.shape == (2, cfg.T + 1)
+    assert result.treatment_results[0].I_history.shape == (2, cfg.T + 1)
+
+
+def test_run_comparison_no_interventions_baseline_equals_treatment():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 20})
+    result = run_comparison(
+        cfg, interventions=[], n_runs=2, base_seed=0,
+        initial_infected=5, parallel=False,
+    )
+    # With empty interventions list, treatment ≡ baseline
+    np.testing.assert_array_equal(
+        result.baseline_results[0].I_history,
+        result.treatment_results[0].I_history,
+    )
+
+
+def test_run_comparison_with_healthcare():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 60})
+    hc = default_healthcare_config()
+    result = run_comparison(
+        cfg, interventions=[], n_runs=2, base_seed=0,
+        initial_infected=5, parallel=False, healthcare=hc,
+    )
+    assert result.baseline_healthcare is not None
+    assert result.treatment_healthcare is not None
+    assert len(result.baseline_healthcare) == 1
+    assert len(result.baseline_healthcare[0]) == 2
