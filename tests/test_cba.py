@@ -68,3 +68,28 @@ def test_cbaconfig_rejects_wrong_length_wage_tuple():
             hours_per_meeting=1.0,
             monetize_health=False,
         )
+
+
+import numpy as np
+
+from sir.cba import discount_factors
+
+
+def test_discount_factor_zero_rate_returns_ones():
+    factors = discount_factors(annual_rate=0.0, T=10)
+    np.testing.assert_array_equal(factors, np.ones(10))
+
+
+def test_discount_factor_positive_rate_decreases_over_time():
+    factors = discount_factors(annual_rate=0.03, T=365)
+    assert factors[0] == 1.0
+    assert factors[364] < 1.0
+    # After 1 year at 3%, factor should be approximately 1/(1+0.03) ≈ 0.971
+    assert 0.965 < factors[364] < 0.975
+
+
+def test_discount_factor_compounds_daily():
+    # After 730 days (2 years) at 3% annual rate
+    factors = discount_factors(annual_rate=0.03, T=730)
+    # (1+0.03)^-2 ≈ 0.9426
+    assert 0.94 < factors[729] < 0.945

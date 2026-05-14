@@ -88,3 +88,18 @@ def default_cba_config() -> CBAConfig:
         hours_per_meeting=1.0,
         monetize_health=False,
     )
+
+
+import numpy as np
+
+
+def discount_factors(annual_rate: float, T: int) -> np.ndarray:
+    """Return per-day discount factors for T days, given an annual rate.
+
+    Factor at day t is (1 + annual_rate)^(-t/365). Day 0 has factor 1.0.
+    Used to discount time-distributed costs and benefits.
+    """
+    if T <= 0:
+        return np.zeros(0, dtype=np.float64)
+    days = np.arange(T, dtype=np.float64)
+    return np.power(1.0 + annual_rate, -days / 365.0)
