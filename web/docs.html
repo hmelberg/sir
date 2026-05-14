@@ -550,6 +550,17 @@ cfg = type(cfg)(**{**cfg.__dict__, "N": 5000, "T": 180})</pre>
 
       <p>X·Y·Z formulation: removes <code>(X · Y · Z) / 7</code> person-meetings per day. If <code>target</code> is given, the reduction concentrates in that group type; otherwise spread uniformly across all groups.</p>
 
+      <div class="signature">vaccination(doses_per_day, window, uptake_rate=1.0)</div>
+
+      <p>Eldest-first vaccination rollout. Effective daily doses = <code>doses_per_day × uptake_rate</code>, so the <code>uptake_rate</code> parameter captures refusal at the population level (set 0.8 if you expect 20% of those offered to decline). Vaccinated agents move to the <code>V</code> state and remain at risk, but their per-meeting transmission probability is scaled by <code>(1 − cfg.v_eff)</code> — efficacy is a scenario parameter (default 0.8) rather than an intervention parameter, since it characterizes the vaccine itself.</p>
+
+      <pre>from sir.comparison import vaccination
+
+inter = vaccination(doses_per_day=50, window=(20, 200), uptake_rate=0.8)
+# Returns an Intervention; pickle-safe; works with parallel=True</pre>
+
+      <p>Both <code>doses_per_day</code> and <code>uptake_rate</code> accept <code>ParameterDistribution</code> values, in which case the function returns an <code>UncertainIntervention</code> ready for PSA. See <a href="#uncertainty">§9</a> for an example.</p>
+
       <h4>Composing interventions</h4>
       <p>Pass a list to <code>run_mc</code> or <code>run_comparison</code>. They are applied in order each day; effects on group properties compose (e.g. mask + WFH multiplies the relevant scalings).</p>
 
@@ -656,6 +667,23 @@ print(result.intervention_samples)   # the 30 parameter draws</pre>
 
       <p>The PSA loop draws all uncertain parameters jointly per outer iteration, then runs <code>n_runs × 2</code> simulations (baseline + treatment) for that draw. With <code>n_psa_samples=30</code> and <code>n_runs=10</code>, that's 600 total simulations.</p>
 
+      <h4>Vaccination with uncertain uptake</h4>
+      <p>Uptake is often the most uncertain part of a vaccination rollout. The same pattern works:</p>
+
+      <pre>from sir.comparison import vaccination
+
+interventions = [
+    vaccination(
+        doses_per_day=50,
+        window=(20, 200),
+        uptake_rate=dist.beta(a=8, b=2),   # mean 0.8, sd ~0.12
+    ),
+]
+result = run_comparison(cfg, interventions, n_runs=10, n_psa_samples=30, healthcare=hc_cfg)
+print(result.outcome_deltas())</pre>
+
+      <p>You can also make <code>doses_per_day</code> a distribution (e.g. <code>dist.uniform(30, 80)</code>) to reflect uncertainty in rollout capacity, or mix multiple uncertain interventions in the same call.</p>
+
       <h4>PSA over disease/behavioral parameters</h4>
       <p>For uncertainty on disease parameters (not intervention strength), use the older PSA workflow with a TOML spec via <code>sir.psa.load_psa_spec</code> and <code>sir.psa.run_psa</code>. The comparison wrapper handles intervention parameters; the older PSA covers everything else.</p>
 
@@ -723,6 +751,7 @@ result.welfare.by_day[10]                     # day-10 breakdown</pre>
           <tr><td>$\gamma$</td><td><code>ScenarioConfig.gamma</code></td><td>$1/\gamma$ = mean infectious period</td></tr>
           <tr><td>$p_g$ per group type</td><td><code>ScenarioConfig.group_p_baseline</code></td><td>Sum × $\bar m$ / $\gamma$ should give your target $R_0$</td></tr>
           <tr><td>$V_a$ per age bin</td><td><code>ScenarioConfig.V_a</code></td><td>Drives behavioral response; higher = more cautious</td></tr>
+          <tr><td>$v_{\text{eff}}$ vaccine efficacy</td><td><code>ScenarioConfig.v_eff</code></td><td>Per-vaccinee transmission reduction (default 0.8). Only matters if a vaccination intervention is active.</td></tr>
           <tr><td>Healthcare rates</td><td><code>HealthcareConfig.*_by_age</code></td><td>Independent of disease dynamics; tune freely</td></tr>
         </tbody>
       </table>

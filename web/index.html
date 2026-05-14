@@ -694,15 +694,17 @@
           <li>Meeting rate, transmission probability, recovery rate</li>
           <li>Cost of getting infected and of taking precaution</li>
           <li>Whether agents respond behaviorally or not</li>
-          <li>Mask-mandate interventions (when and how strong)</li>
+          <li>Three interventions: mask mandate, contact reduction (X·Y·Z), vaccination (doses, uptake, efficacy)</li>
+          <li>Healthcare assumptions (hospitalization, ICU, mortality, life-years lost)</li>
         </ul>
       </div>
       <div class="card">
         <h3>What you see</h3>
         <ul style="margin: 0.5rem 0 0;">
-          <li>Susceptible / infected / recovered curves</li>
-          <li>The behavioral response over time (meeting reduction, precaution effort)</li>
-          <li>Peak infected, attack rate, total welfare</li>
+          <li>Susceptible / infected / recovered / vaccinated curves</li>
+          <li>Selectable outcomes: infections, hospitalizations, ICU, deaths, vaccinations</li>
+          <li>With-vs-without comparison for every selected outcome</li>
+          <li>Peak infected, attack rate, deaths, life-years lost, welfare — all delta vs baseline</li>
         </ul>
       </div>
     </div>
@@ -770,6 +772,14 @@
     </table>
 
     <p>Policy changes shift the constraint set; rational agents re-optimize given the new constraints. <strong>Risk compensation</strong> emerges naturally: if a mask mandate lowers $p$, optimal $\theta^*$ rises slightly (people feel safer, gather more) — a comparative-statics result, not an extra assumption.</p>
+
+    <h3>Vaccination as a state machine</h3>
+
+    <p>This page's <a href="#" data-tab-link="simulation">Simulation</a> tab and the underlying Python model both implement vaccination as a fourth disease state $V$ in parallel with $S$, $I$, $R$. During the rollout window, susceptibles are moved into $V$ at a rate of <code>doses_per_day × uptake_rate</code> (capped at the remaining susceptible pool), prioritized eldest-first in the Python ABM. Vaccinated agents remain at risk but their per-meeting infection probability is scaled:</p>
+
+    $$\pi_{V} = (1 - v_{\text{eff}}) \cdot \pi_{S}$$
+
+    <p>where $v_{\text{eff}} \in [0, 1]$ is the population-average vaccine efficacy (default 0.8). Three controls in the Simulation tab — daily doses, uptake rate (refusal at the population level), and efficacy — let you explore the trade-off between rollout speed and behavioral response. The model does <em>not</em> support per-agent heterogeneity in $v_{\text{eff}}$; that's a v2 extension.</p>
 
     <h2>4. Welfare accounting</h2>
 
@@ -1216,7 +1226,7 @@
   </main>
 
   <footer>
-    Built with Pyodide and Plotly. Full Python implementation (including the multi-group bipartite ABM, vaccination, PSA, and welfare decomposition) is in the underlying <code>sir</code> package.
+    Built with Pyodide and Plotly. The full Python implementation (multi-group bipartite ABM with age-stratified mixing, healthcare outcomes, PSA, and welfare decomposition) is in the underlying <code>sir</code> package. See the <a href="docs.html">documentation</a>.
   </footer>
 
   <div id="tooltip" role="tooltip"></div>
