@@ -110,3 +110,38 @@ def test_cbareport_constructible():
     )
     assert rpt.streams["direct_medical"] == 1000.0
     assert rpt.total_monetary_cost == 1000.0
+
+
+from sir.cba import compute_direct_medical
+
+
+def test_direct_medical_zero_when_no_hospitalizations():
+    hosp_prev = np.zeros(10)
+    icu_prev = np.zeros(10)
+    new_inf = np.zeros(10)
+    cfg = default_cba_config()
+    total, per_day = compute_direct_medical(hosp_prev, icu_prev, new_inf, cfg, discount_rate=0.0)
+    assert total == 0.0
+    np.testing.assert_array_equal(per_day, np.zeros(10))
+
+
+def test_direct_medical_sums_streams():
+    hosp_prev = np.array([10.0, 20.0])
+    icu_prev = np.array([2.0, 4.0])
+    new_inf = np.array([0.0, 100.0])
+    cfg = default_cba_config()
+    total, per_day = compute_direct_medical(hosp_prev, icu_prev, new_inf, cfg, discount_rate=0.0)
+    # Day 0: 10*1500 + 2*4000 + 0*200 = 23000; Day 1: 20*1500 + 4*4000 + 100*200 = 66000
+    assert np.isclose(per_day[0], 23000.0)
+    assert np.isclose(per_day[1], 66000.0)
+    assert np.isclose(total, 89000.0)
+
+
+def test_direct_medical_discounts_future():
+    hosp_prev = np.array([0.0, 100.0])
+    icu_prev = np.zeros(2)
+    new_inf = np.zeros(2)
+    cfg = default_cba_config()
+    total_disc, _ = compute_direct_medical(hosp_prev, icu_prev, new_inf, cfg, discount_rate=0.5)
+    total_undisc, _ = compute_direct_medical(hosp_prev, icu_prev, new_inf, cfg, discount_rate=0.0)
+    assert total_disc < total_undisc

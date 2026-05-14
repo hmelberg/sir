@@ -105,6 +105,25 @@ def discount_factors(annual_rate: float, T: int) -> np.ndarray:
     return np.power(1.0 + annual_rate, -days / 365.0)
 
 
+def compute_direct_medical(
+    hosp_prev: np.ndarray,
+    icu_prev: np.ndarray,
+    new_inf: np.ndarray,
+    cfg: CBAConfig,
+    discount_rate: float,
+) -> tuple[float, np.ndarray]:
+    """Stream 1: Direct medical costs (hospital + ICU + outpatient)."""
+    T = hosp_prev.size
+    raw = (
+        hosp_prev * cfg.hospital_cost_per_day
+        + icu_prev * cfg.icu_cost_per_day
+        + new_inf * cfg.outpatient_cost_per_case
+    )
+    factors = discount_factors(discount_rate, T)
+    discounted = raw * factors
+    return float(discounted.sum()), discounted
+
+
 @dataclass
 class CBAReport:
     streams: dict[str, float]
