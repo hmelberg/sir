@@ -145,3 +145,33 @@ def test_direct_medical_discounts_future():
     total_disc, _ = compute_direct_medical(hosp_prev, icu_prev, new_inf, cfg, discount_rate=0.5)
     total_undisc, _ = compute_direct_medical(hosp_prev, icu_prev, new_inf, cfg, discount_rate=0.0)
     assert total_disc < total_undisc
+
+
+from sir.cba import compute_vaccination_program
+
+
+def test_vaccination_program_zero_when_no_vaccinations():
+    new_vax_by_age = np.zeros((10, 7))
+    cfg = default_cba_config()
+    total, per_day = compute_vaccination_program(new_vax_by_age, cfg, discount_rate=0.0)
+    assert total == 0.0
+
+
+def test_vaccination_program_sums_dose_admin_sideeffect():
+    new_vax_by_age = np.zeros((2, 7))
+    new_vax_by_age[0, 6] = 10.0
+    cfg = default_cba_config()
+    total, per_day = compute_vaccination_program(new_vax_by_age, cfg, discount_rate=0.0)
+    # 10 × (25 + 30 + 50) = 1050
+    assert np.isclose(total, 1050.0)
+    assert np.isclose(per_day[0], 1050.0)
+    assert per_day[1] == 0.0
+
+
+def test_vaccination_program_discounts():
+    new_vax_by_age = np.zeros((365, 7))
+    new_vax_by_age[364, 6] = 100.0
+    cfg = default_cba_config()
+    total_disc, _ = compute_vaccination_program(new_vax_by_age, cfg, discount_rate=0.03)
+    total_undisc, _ = compute_vaccination_program(new_vax_by_age, cfg, discount_rate=0.0)
+    assert total_disc < total_undisc

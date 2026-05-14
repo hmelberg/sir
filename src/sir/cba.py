@@ -124,6 +124,21 @@ def compute_direct_medical(
     return float(discounted.sum()), discounted
 
 
+def compute_vaccination_program(
+    new_vax_by_age: np.ndarray,
+    cfg: CBAConfig,
+    discount_rate: float,
+) -> tuple[float, np.ndarray]:
+    """Stream 2: Vaccination program costs (dose + admin + side-effect WTP)."""
+    T = new_vax_by_age.shape[0]
+    new_vax_per_day = new_vax_by_age.sum(axis=1)
+    per_dose_cost = cfg.vax_dose_cost + cfg.vax_admin_cost + cfg.vax_sideeffect_value
+    raw = new_vax_per_day * per_dose_cost
+    factors = discount_factors(discount_rate, T)
+    discounted = raw * factors
+    return float(discounted.sum()), discounted
+
+
 @dataclass
 class CBAReport:
     streams: dict[str, float]
