@@ -182,6 +182,24 @@ def compute_productivity_death(
     return float(discounted.sum()), discounted
 
 
+def compute_yll(
+    daily_deaths_by_age: np.ndarray,
+    yll_per_death_by_age: tuple[float, ...],
+    discount_rate: float,
+) -> tuple[float, np.ndarray]:
+    """Stream 5: Years of life lost from mortality, PV-discounted within YLL."""
+    T = daily_deaths_by_age.shape[0]
+    yll = np.asarray(yll_per_death_by_age, dtype=np.float64)
+    if discount_rate > 0:
+        pv_yll = (1.0 - np.exp(-discount_rate * yll)) / discount_rate
+    else:
+        pv_yll = yll
+    raw = daily_deaths_by_age @ pv_yll
+    factors = discount_factors(discount_rate, T)
+    discounted = raw * factors
+    return float(discounted.sum()), discounted
+
+
 @dataclass
 class CBAReport:
     streams: dict[str, float]

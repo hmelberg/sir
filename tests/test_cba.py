@@ -237,3 +237,32 @@ def test_productivity_death_no_loss_for_post_retirement():
     cfg = default_cba_config()
     total, _ = compute_productivity_death(daily_deaths_by_age, cfg, discount_rate=0.0)
     assert total == 0.0
+
+
+from sir.cba import compute_yll
+
+
+def test_yll_zero_when_no_deaths():
+    daily_deaths_by_age = np.zeros((10, 7))
+    yll_per_age = (75.0,) * 7
+    total, _ = compute_yll(daily_deaths_by_age, yll_per_age, discount_rate=0.0)
+    assert total == 0.0
+
+
+def test_yll_undiscounted():
+    daily_deaths_by_age = np.zeros((2, 7))
+    daily_deaths_by_age[0, 0] = 1
+    daily_deaths_by_age[0, 6] = 1
+    yll_per_age = (75.0, 65.0, 55.0, 45.0, 35.0, 25.0, 8.0)
+    total, per_day = compute_yll(daily_deaths_by_age, yll_per_age, discount_rate=0.0)
+    assert np.isclose(total, 83.0)
+    assert np.isclose(per_day[0], 83.0)
+
+
+def test_yll_discounted_pv_form():
+    daily_deaths_by_age = np.zeros((1, 7))
+    daily_deaths_by_age[0, 3] = 1
+    yll_per_age = (0.0, 0.0, 0.0, 20.0, 0.0, 0.0, 0.0)
+    total, _ = compute_yll(daily_deaths_by_age, yll_per_age, discount_rate=0.03)
+    expected = (1 - np.exp(-20 * 0.03)) / 0.03
+    assert np.isclose(total, expected, rtol=1e-3)
