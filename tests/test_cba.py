@@ -330,3 +330,93 @@ def test_precaution_cost_scales_with_e_squared():
     # 0.25 × 100 × 25 × 1 = 625/day; over 10 days = 6250
     total, _ = compute_precaution_cost(e_hist, N, cfg, discount_rate=0.0)
     assert np.isclose(total, 6250.0)
+
+
+import pandas as pd
+
+from sir.cba import compute_cba
+from sir.config import default_config
+from sir.healthcare import default_healthcare_config, compute_healthcare_outcomes
+from sir.simulation import simulate
+
+
+def _make_result_and_hc():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 60})
+    rng = np.random.default_rng(0)
+    result = simulate(cfg, interventions=[], rng=rng, initial_infected=5)
+    hc_cfg = default_healthcare_config()
+    hc_out = compute_healthcare_outcomes(result, hc_cfg)
+    return result, hc_out, hc_cfg
+
+
+def test_compute_cba_returns_report():
+    result, hc_out, hc_cfg = _make_result_and_hc()
+    cba_cfg = default_cba_config()
+    rpt = compute_cba(result, hc_out, hc_cfg, cba_cfg, policy_cost_per_day=0.0)
+    assert isinstance(rpt, CBAReport)
+    expected = {
+        "direct_medical", "vaccination_program", "productivity_illness",
+        "productivity_death", "yll", "morbidity_qaly",
+        "behavioral_loss", "precaution_cost", "policy_costs",
+    }
+    assert set(rpt.streams.keys()) == expected
+    assert set(rpt.units.keys()) == expected
+
+
+def test_compute_cba_no_infections_all_streams_zero():
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 30})
+    rng = np.random.default_rng(0)
+    result = simulate(cfg, interventions=[], rng=rng, initial_infected=0)
+    hc_cfg = default_healthcare_config()
+    hc_out = compute_healthcare_outcomes(result, hc_cfg)
+    cba_cfg = default_cba_config()
+    rpt = compute_cba(result, hc_out, hc_cfg, cba_cfg, policy_cost_per_day=0.0)
+    assert rpt.streams["direct_medical"] == 0.0
+    assert rpt.streams["productivity_illness"] == 0.0
+    assert rpt.streams["productivity_death"] == 0.0
+    assert rpt.streams["yll"] == 0.0
+    assert rpt.streams["morbidity_qaly"] == 0.0
+
+
+def test_compute_cba_summary_returns_dataframe():
+    result, hc_out, hc_cfg = _make_result_and_hc()
+    cba_cfg = default_cba_config()
+    rpt = compute_cba(result, hc_out, hc_cfg, cba_cfg, policy_cost_per_day=0.0)
+    df = rpt.summary()
+    assert isinstance(df, pd.DataFrame)
+    assert "value" in df.columns
+    assert "unit" in df.columns
+
+
+def test_compute_cba_monetize_health_combines_streams():
+    result, hc_out, hc_cfg = _make_result_and_hc()
+    cba_cfg = default_cba_config()
+    cba_cfg = type(cba_cfg)(**{**cba_cfg.__dict__, "monetize_health": True})
+    rpt = compute_cba(result, hc_out, hc_cfg, cba_cfg, policy_cost_per_day=0.0)
+    assert rpt.total_cost_including_health is not None
+    expected_health_dollars = (
+        rpt.total_health_burden_yll * cba_cfg.value_per_yll
+        + rpt.total_health_burden_qaly * cba_cfg.value_per_yll
+    )
+    assert np.isclose(
+        rpt.total_cost_including_health,
+        rpt.total_monetary_cost + expected_health_dollars,
+        rtol=1e-9,
+    )
+
+
+def test_compute_cba_cost_effectiveness_vs_returns_ratios():
+    result_a, hc_a, hc_cfg = _make_result_and_hc()
+    rng_b = np.random.default_rng(1)
+    cfg = default_config()
+    cfg = type(cfg)(**{**cfg.__dict__, "N": 500, "T": 60})
+    result_b = simulate(cfg, interventions=[], rng=rng_b, initial_infected=5)
+    hc_b = compute_healthcare_outcomes(result_b, hc_cfg)
+    cba_cfg = default_cba_config()
+    rpt_a = compute_cba(result_a, hc_a, hc_cfg, cba_cfg, policy_cost_per_day=0.0)
+    rpt_b = compute_cba(result_b, hc_b, hc_cfg, cba_cfg, policy_cost_per_day=0.0)
+    ratios = rpt_a.cost_effectiveness_vs(rpt_b)
+    assert "cost_per_yll_averted" in ratios
+    assert "cost_per_qaly_gained" in ratios

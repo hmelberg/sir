@@ -263,3 +263,179 @@ class CBAReport:
     total_health_burden_qaly: float
     total_cost_including_health: float | None
     per_day: dict[str, np.ndarray]
+
+
+import pandas as pd
+
+from sir.simulation import SimResult
+from sir.healthcare import HealthcareConfig, HealthcareOutcomes
+
+
+def compute_cba(
+    sim_result: SimResult,
+    hc_outcomes: HealthcareOutcomes,
+    hc_config: HealthcareConfig,
+    cba_config: CBAConfig,
+    policy_cost_per_day: float = 0.0,
+) -> CBAReport:
+    """Compute the 9-stream CBA report.
+
+    Streams 7 (behavioral_loss) and 8 (precaution_cost) are set to 0
+    in v1.2a because SimResult does not yet expose per-day average theta
+    and e by population. Their formulas are implemented in
+    compute_behavioral_loss / compute_precaution_cost; the orchestrator
+    will wire them up in v1.2b once per-day averages are stored.
+
+    policy_cost_per_day is the constant daily policy cost from active
+    interventions, provided by the caller (run_comparison).
+    """
+    r = cba_config.discount_rate
+    T = sim_result.new_infections_by_age.shape[0]
+    new_inf = sim_result.new_infections_history.astype(np.float64)
+    new_inf_by_age = sim_result.new_infections_by_age.astype(np.float64)
+
+    # Stream 1: Direct medical
+    s1, s1_pd = compute_direct_medical(
+        hc_outcomes.hosp_prev, hc_outcomes.icu_prev, new_inf, cba_config, r,
+    )
+
+    # Stream 2: Vaccination program — diff V_history; allocate all to age bin 6
+    # (eldest-first policy per v0.2). Clamp negative diffs (state can transition V→I).
+    new_vax_per_day_total = np.diff(
+        sim_result.V_history.astype(np.float64), prepend=sim_result.V_history[0]
+    )
+    new_vax_per_day_total = np.clip(new_vax_per_day_total, 0.0, None)
+    new_vax_by_age = np.zeros((T, 7), dtype=np.float64)
+    new_vax_by_age[:, 6] = new_vax_per_day_total
+    s2, s2_pd = compute_vaccination_program(new_vax_by_age, cba_config, r)
+
+    # Stream 3: Productivity loss from illness
+    s3, s3_pd = compute_productivity_illness(
+        new_inf_by_age,
+        hc_config.hosp_rate_by_age, hc_config.icu_rate_by_age,
+        cba_config, r,
+    )
+
+    # Convert cumulative deaths_by_age → daily incidence
+    deaths_cum = hc_outcomes.deaths_by_age
+    daily_deaths_by_age = np.zeros_like(deaths_cum)
+    daily_deaths_by_age[1:] = deaths_cum[1:] - deaths_cum[:-1]
+    daily_deaths_by_age[0] = deaths_cum[0]
+
+    # Stream 4: Productivity loss from death
+    s4, s4_pd = compute_productivity_death(daily_deaths_by_age, cba_config, r)
+
+    # Stream 5: YLL
+    s5, s5_pd = compute_yll(daily_deaths_by_age, hc_config.yll_per_death_by_age, r)
+
+    # Stream 6: Acute morbidity QALY
+    s6, s6_pd = compute_morbidity_qaly(
+        new_inf_by_age,
+        hc_config.hosp_rate_by_age, hc_config.icu_rate_by_age,
+        cba_config, r,
+    )
+
+    # Streams 7 & 8: behavioral_loss + precaution_cost — see docstring.
+    s7 = 0.0
+    s7_pd = np.zeros(T, dtype=np.float64)
+    s8 = 0.0
+    s8_pd = np.zeros(T, dtype=np.float64)
+
+    # Stream 9: Policy costs (caller supplies constant daily rate)
+    raw_policy = np.full(T, policy_cost_per_day, dtype=np.float64)
+    factors = discount_factors(r, T)
+    s9_pd = raw_policy * factors
+    s9 = float(s9_pd.sum())
+
+    streams = {
+        "direct_medical": s1,
+        "vaccination_program": s2,
+        "productivity_illness": s3,
+        "productivity_death": s4,
+        "yll": s5,
+        "morbidity_qaly": s6,
+        "behavioral_loss": s7,
+        "precaution_cost": s8,
+        "policy_costs": s9,
+    }
+    units = {
+        "direct_medical": "$",
+        "vaccination_program": "$",
+        "productivity_illness": "$",
+        "productivity_death": "$",
+        "yll": "YLL",
+        "morbidity_qaly": "QALY",
+        "behavioral_loss": "$",
+        "precaution_cost": "$",
+        "policy_costs": "$",
+    }
+    per_day = {
+        "direct_medical": s1_pd,
+        "vaccination_program": s2_pd,
+        "productivity_illness": s3_pd,
+        "productivity_death": s4_pd,
+        "yll": s5_pd,
+        "morbidity_qaly": s6_pd,
+        "behavioral_loss": s7_pd,
+        "precaution_cost": s8_pd,
+        "policy_costs": s9_pd,
+    }
+
+    monetary = [
+        "direct_medical", "vaccination_program",
+        "productivity_illness", "productivity_death",
+        "behavioral_loss", "precaution_cost", "policy_costs",
+    ]
+    total_monetary_cost = sum(streams[k] for k in monetary)
+    total_health_yll = streams["yll"]
+    total_health_qaly = streams["morbidity_qaly"]
+
+    total_cost_including_health: float | None = None
+    if cba_config.monetize_health:
+        health_in_money = (
+            total_health_yll * cba_config.value_per_yll
+            + total_health_qaly * cba_config.value_per_yll
+        )
+        total_cost_including_health = total_monetary_cost + health_in_money
+
+    return CBAReport(
+        streams=streams,
+        units=units,
+        total_monetary_cost=total_monetary_cost,
+        total_health_burden_yll=total_health_yll,
+        total_health_burden_qaly=total_health_qaly,
+        total_cost_including_health=total_cost_including_health,
+        per_day=per_day,
+    )
+
+
+def _cbareport_summary(self: CBAReport) -> "pd.DataFrame":
+    rows = [
+        {"stream": k, "value": v, "unit": self.units[k]}
+        for k, v in self.streams.items()
+    ]
+    df = pd.DataFrame(rows).set_index("stream")
+    return df
+
+
+def _cbareport_cost_effectiveness_vs(
+    self: CBAReport, baseline: CBAReport
+) -> dict[str, float]:
+    delta_cost = self.total_monetary_cost - baseline.total_monetary_cost
+    delta_yll = self.total_health_burden_yll - baseline.total_health_burden_yll
+    delta_qaly = self.total_health_burden_qaly - baseline.total_health_burden_qaly
+    yll_averted = -delta_yll
+    qaly_gained = -delta_qaly
+    cost_per_yll = delta_cost / yll_averted if yll_averted != 0 else float("inf")
+    cost_per_qaly = delta_cost / qaly_gained if qaly_gained != 0 else float("inf")
+    return {
+        "delta_monetary_cost": delta_cost,
+        "yll_averted": yll_averted,
+        "qaly_gained": qaly_gained,
+        "cost_per_yll_averted": cost_per_yll,
+        "cost_per_qaly_gained": cost_per_qaly,
+    }
+
+
+CBAReport.summary = _cbareport_summary
+CBAReport.cost_effectiveness_vs = _cbareport_cost_effectiveness_vs
