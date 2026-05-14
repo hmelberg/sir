@@ -24,3 +24,24 @@ def test_mc_summary_statistics():
     result = run_mc(cfg, interventions=[], n_runs=5, base_seed=0, initial_infected=10)
     mean_S = result.S_history.mean(axis=0)
     assert mean_S.shape == (cfg.T + 1,)
+
+
+from sir.healthcare import default_healthcare_config
+
+
+def test_mc_returns_healthcare_when_requested():
+    cfg = default_config()
+    hc = default_healthcare_config()
+    result = run_mc(
+        cfg, interventions=[], n_runs=3, base_seed=0,
+        initial_infected=10, healthcare=hc, parallel=False,
+    )
+    assert result.healthcare_outcomes is not None
+    assert len(result.healthcare_outcomes) == 3
+    assert result.healthcare_outcomes[0].total_deaths >= 0
+
+
+def test_mc_healthcare_default_none():
+    cfg = default_config()
+    result = run_mc(cfg, interventions=[], n_runs=2, base_seed=0, parallel=False)
+    assert result.healthcare_outcomes is None
