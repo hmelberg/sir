@@ -4,9 +4,27 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sir"
-version = "0.1.0"
-description = "Microfounded ABM for epidemic cost-benefit analysis"
+version = "0.2.0"
+description = "Microfounded agent-based SIR model with rational behavioral response, interventions, healthcare outcomes, and probabilistic sensitivity analysis"
+readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Hans Olav Melberg", email = "hans.melberg@gmail.com" },
+]
+keywords = ["epidemiology", "SIR", "ABM", "agent-based model", "cost-benefit", "intervention"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
@@ -19,6 +37,12 @@ dev = [
     "pytest>=7.4",
     "pytest-xdist>=3.5",
 ]
+
+[project.urls]
+Homepage = "https://github.com/hmelberg/sir"
+"Live demo" = "https://hmelberg.github.io/sir/"
+Documentation = "https://hmelberg.github.io/sir/docs.html"
+Issues = "https://github.com/hmelberg/sir/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

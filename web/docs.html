@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>sir — Documentation</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --surface: #ffffff;
+      --border: #e7e5e4;
+      --text: #1c1917;
+      --muted: #57534e;
+      --accent: #1e40af;
+      --accent-soft: #dbeafe;
+      --code-bg: #f5f5f4;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Source Serif 4', Georgia, serif;
+      font-size: 17px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .ui, button, input, select, label, nav, code, pre, .toc, h1, h2, h3, h4 {
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+
+    code, pre {
+      font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .header-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+    }
+
+    .brand {
+      font-weight: 600;
+      font-size: 1.05rem;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .brand .small {
+      color: var(--muted);
+      font-weight: 400;
+      font-size: 0.85rem;
+      margin-left: 0.4rem;
+    }
+
+    nav { display: flex; gap: 0.25rem; }
+
+    nav a {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--muted);
+      padding: 0.45rem 0.9rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.1s, color 0.1s;
+      text-decoration: none;
+    }
+
+    nav a:hover { background: var(--accent-soft); color: var(--accent); }
+    nav a.active { background: var(--accent); color: white; }
+
+    .meta-bar {
+      background: #fef3c7;
+      border-bottom: 1px solid #fcd34d;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.78rem;
+      padding: 0.45rem 1.5rem;
+    }
+
+    .meta-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .meta-bar .author { color: #78350f; }
+    .meta-bar .disclaimer {
+      color: #92400e;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .meta-bar .disclaimer::before { content: '⚠'; font-size: 0.9rem; }
+
+    .layout {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 3rem;
+      padding: 2.5rem 1.5rem 5rem;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; gap: 1rem; }
+      aside.toc { position: static; max-height: none; }
+    }
+
+    aside.toc {
+      position: sticky;
+      top: 80px;
+      align-self: start;
+      font-size: 0.85rem;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+
+    aside.toc h4 {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0 0 0.5rem;
+    }
+
+    aside.toc ol {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      counter-reset: section;
+    }
+
+    aside.toc ol li {
+      margin: 0.15rem 0;
+      counter-increment: section;
+    }
+
+    aside.toc ol li a {
+      color: var(--muted);
+      text-decoration: none;
+      padding: 0.2rem 0;
+      display: block;
+      border-radius: 3px;
+    }
+
+    aside.toc ol li a::before {
+      content: counter(section) ". ";
+      color: var(--muted);
+    }
+
+    aside.toc ol li a:hover { color: var(--accent); }
+
+    main {
+      min-width: 0;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.6rem;
+      line-height: 1.2;
+    }
+
+    h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin: 3rem 0 0.7rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    h2:first-of-type { border-top: none; padding-top: 0; }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin: 2rem 0 0.4rem;
+    }
+
+    h4 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin: 1.4rem 0 0.4rem;
+      color: var(--muted);
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-style: italic;
+      margin-bottom: 2rem;
+    }
+
+    p { margin: 0.8rem 0; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    ul, ol { padding-left: 1.4rem; }
+    li { margin-bottom: 0.3rem; }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.86rem;
+      line-height: 1.6;
+      margin: 1rem 0;
+    }
+
+    p > code, li > code, td > code {
+      background: var(--code-bg);
+      padding: 0.05rem 0.35rem;
+      border-radius: 3px;
+      font-size: 0.88em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2rem 0;
+      font-size: 0.93rem;
+    }
+
+    th, td {
+      padding: 0.55rem 0.8rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      font-weight: 600;
+      background: var(--code-bg);
+      font-size: 0.85rem;
+    }
+
+    .callout {
+      background: var(--accent-soft);
+      border-left: 3px solid var(--accent);
+      padding: 1rem 1.2rem;
+      border-radius: 4px;
+      margin: 1.5rem 0;
+    }
+
+    .callout.note { background: #f5f5f4; border-left-color: var(--muted); }
+    .callout.warning { background: #fef3c7; border-left-color: #d97706; }
+
+    .signature {
+      background: var(--code-bg);
+      border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88rem;
+      margin: 1rem 0 0.5rem;
+      overflow-x: auto;
+      border-radius: 3px;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem 1rem;
+      color: var(--muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <a href="index.html" class="brand">Microfounded SIR <span class="small">— documentation</span></a>
+      <nav>
+        <a href="index.html#brief">Brief</a>
+        <a href="index.html#detailed">Detailed</a>
+        <a href="index.html#simulation">Simulation</a>
+        <a href="docs.html" class="active">Docs</a>
+        <a href="https://github.com/hmelberg/sir" target="_blank">GitHub →</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="meta-bar">
+    <div class="meta-inner">
+      <span class="author">Hans Olav Melberg — UiT The Arctic University of Norway</span>
+      <span class="disclaimer">AI assisted work in progress. May contain mistakes. Do not use for policy purposes.</span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="toc">
+      <h4>Contents</h4>
+      <ol>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#install">Installation</a></li>
+        <li><a href="#quickstart">Quick start</a></li>
+        <li><a href="#concepts">Core concepts</a></li>
+        <li><a href="#api">API reference</a></li>
+        <li><a href="#interventions">Interventions</a></li>
+        <li><a href="#healthcare">Healthcare outcomes</a></li>
+        <li><a href="#comparison">Comparison wrapper</a></li>
+        <li><a href="#uncertainty">Uncertainty (PSA)</a></li>
+        <li><a href="#welfare">Welfare accounting</a></li>
+        <li><a href="#math">Mathematical notes</a></li>
+        <li><a href="#calibration">Calibration</a></li>
+        <li><a href="#limits">Scope & limitations</a></li>
+        <li><a href="#citing">Citing</a></li>
+      </ol>
+    </aside>
+
+    <main>
+      <h1>sir — Microfounded epidemic ABM</h1>
+      <p class="subtitle">Full documentation for the Python package and modeling framework.</p>
+
+      <p>
+        This page documents the Python package <code>sir</code>: a discrete-time, agent-based SIR model with rational behavioral response, structured contacts, interventions, healthcare outcomes, and probabilistic sensitivity analysis. For a non-technical overview, the <a href="index.html">interactive demo</a> is the right place to start. For the mathematical specification in detail, see the <a href="index.html#detailed">Detailed</a> tab on the demo. This page covers <em>using</em> the Python package.
+      </p>
+
+      <!-- ========== Overview ========== -->
+      <h2 id="overview">1. Overview</h2>
+
+      <p>
+        The classical SIR model lumps everything about disease spread into a single rate parameter $\beta$. This package decomposes $\beta$ into two interpretable components:
+      </p>
+
+      <div class="callout">
+        $$\beta = m \cdot p$$
+        <p style="margin: 0.4rem 0 0; font-family: 'Inter', sans-serif; font-size: 0.88rem;">
+          $m$ = average meetings per person per day, $p$ = probability of transmission given a meeting between susceptible and infected.
+        </p>
+      </div>
+
+      <p>
+        Interventions act directly on $m$ (contact reduction: closures, gathering limits) and $p$ (precaution: masks, ventilation). Agents adjust both endogenously by solving a per-period optimization that balances the utility of social contact against the expected cost of infection. The package wraps this into a high-level API so that policy comparisons return tidy tables with confidence intervals.
+      </p>
+
+      <p>The package has three layers:</p>
+
+      <table>
+        <thead>
+          <tr><th>Layer</th><th>Modules</th><th>What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Core simulation</td><td><code>world</code>, <code>simulation</code>, <code>transmission</code>, <code>disease</code>, <code>foc</code>, <code>welfare</code>, <code>interventions</code></td><td>Build a world, step the ABM forward, accumulate per-day welfare</td></tr>
+          <tr><td>Reporting</td><td><code>monte_carlo</code>, <code>healthcare</code>, <code>plots</code></td><td>Stochastic ensembles, derived healthcare outcomes, standard plots</td></tr>
+          <tr><td>Analysis</td><td><code>comparison</code>, <code>psa</code>, <code>distributions</code></td><td>High-level wrappers: with-vs-without comparison and PSA</td></tr>
+        </tbody>
+      </table>
+
+      <p>Most users will only interact with the analysis layer. The core layer is exposed for customization.</p>
+
+      <!-- ========== Installation ========== -->
+      <h2 id="install">2. Installation</h2>
+
+      <p>Python 3.11 or later required.</p>
+
+      <h4>From GitHub (recommended)</h4>
+      <pre>pip install git+https://github.com/hmelberg/sir.git</pre>
+
+      <h4>For development</h4>
+      <pre>git clone https://github.com/hmelberg/sir.git
+cd sir
+pip install -e ".[dev]"
+pytest</pre>
+
+      <p>The <code>[dev]</code> extra installs <code>pytest</code> and <code>pytest-xdist</code> for running the test suite (~110 tests, &lt;30 s).</p>
+
+      <h4>Dependencies</h4>
+      <ul>
+        <li><code>numpy ≥ 1.26</code></li>
+        <li><code>scipy ≥ 1.11</code> (for the FOC root-find via <code>brentq</code>)</li>
+        <li><code>pandas ≥ 2.1</code> (for the comparison delta table)</li>
+        <li><code>matplotlib ≥ 3.8</code> (for plot helpers; not required if you only use the analysis layer)</li>
+      </ul>
+
+      <!-- ========== Quick start ========== -->
+      <h2 id="quickstart">3. Quick start</h2>
+
+      <p>The simplest meaningful use: compare a baseline epidemic against an intervention-laden scenario and print the delta table.</p>
+
+      <pre>from sir.comparison import run_comparison, transmission_reduction
+from sir.config import default_config
+from sir.constants import GroupType
+from sir.healthcare import default_healthcare_config
+
+cfg = default_config()
+hc = default_healthcare_config()
+
+interventions = [
+    transmission_reduction(
+        p_factor=0.5,
+        window=(20, 120),
+        targets={GroupType.SCHOOL, GroupType.WORKPLACE, GroupType.COMMUNITY},
+    ),
+]
+
+result = run_comparison(
+    cfg, interventions=interventions, n_runs=10,
+    initial_infected=10, healthcare=hc,
+)
+
+print(result.outcome_deltas().round(2))</pre>
+
+      <p>This runs 10 baseline simulations and 10 treatment simulations with paired seeds (same RNG state for each run pair, so the only systematic difference is the intervention), then prints:</p>
+
+      <pre>                      baseline    treatment      delta  delta_pct
+outcome
+peak_I                 146.30       62.40       -83.90    -57.4
+final_attack_rate        0.27         0.06       -0.21    -78.2
+total_deaths            18.86         4.12      -14.74    -78.1
+total_yll              270.92        49.30     -221.62    -81.8
+peak_hosp_prev           6.04         3.10       -2.94    -48.7
+peak_icu_prev            2.29         1.21       -1.08    -47.1
+welfare           10968402.5   11052103.6    83701.1      0.8</pre>
+
+      <p>Welfare can actually improve under intervention here because averted infections outweigh the small attendance-utility loss. This kind of trade-off is what the model is designed to surface.</p>
+
+      <!-- ========== Core concepts ========== -->
+      <h2 id="concepts">4. Core concepts</h2>
+
+      <h3>Agents and groups</h3>
+      <p>The world contains <code>N</code> agents (default 10,000) with attributes including age (binned into 7 groups), disease state, and group memberships. Agents belong to multiple groups simultaneously: a household, possibly a school or workplace, possibly recurring leisure venues, and the community. Each group has a type, a size, an attendance multiplier, and a transmission multiplier.</p>
+
+      <h3>Disease state</h3>
+      <p>Four states: <code>S</code> (susceptible), <code>I</code> (infected), <code>R</code> (recovered), <code>V</code> (vaccinated; still at risk but with reduced transmission). Transitions:</p>
+      <ul>
+        <li>$S \to I$ via per-day per-group hazard</li>
+        <li>$V \to I$ at rate <code>(1 − v_eff)</code> times the susceptible hazard</li>
+        <li>$I \to R$ with daily probability $\gamma$</li>
+        <li>$S \to V$ via vaccination intervention</li>
+      </ul>
+
+      <h3>Behavioral choice</h3>
+      <p>Each day, each agent chooses an attendance multiplier $\theta \in [0,1]$ on voluntary groups (kin, leisure, community) and a precaution effort $e \in [0,1]$ on all interactions. They maximize per-period flow utility:</p>
+
+      $$U(\theta, e \mid I/N) = \sum_g \alpha_g \log(1 + m_g(\theta)) - \tfrac{1}{2}\kappa e^2 - V_a \cdot \pi(\theta, e; I/N)$$
+
+      <p>where $\alpha_g$ is the utility weight per group, $\kappa$ is the cost of precaution, $V_a$ is the age-specific cost of getting infected, and $\pi$ is the per-period infection probability. Agents react to <em>true</em> prevalence (rational expectations) and treat their own action as not affecting aggregate prevalence (atomism). The gap between private and social optimum is the externality that justifies policy.</p>
+
+      <h3>Welfare</h3>
+      <p>Welfare is the sum of per-agent flow utilities over time, decomposed into 6 components: attendance utility (+), precaution cost (−), infection cost (−), vaccination cost (−), direct policy cost (−), spillover policy cost (−). The <code>welfare_components</code> field of <code>MCResult</code> exposes each.</p>
+
+      <!-- ========== API reference ========== -->
+      <h2 id="api">5. API reference</h2>
+
+      <h3>Configuration</h3>
+
+      <div class="signature">from sir.config import default_config, ScenarioConfig</div>
+
+      <p><code>default_config()</code> returns a <code>ScenarioConfig</code> with v0.2 defaults: $N=10\,000$, $T=365$, $\gamma=1/7$, $\kappa=1.0$, $v_{\text{eff}}=0.8$, with 7-tuple $V_a$ scaling from 0.5 (kids) to 30 (elderly). To override:</p>
+
+      <pre>cfg = default_config()
+cfg = type(cfg)(**{**cfg.__dict__, "N": 5000, "T": 180})</pre>
+
+      <p><code>ScenarioConfig</code> is a <code>frozen</code> dataclass, so this idiom is the way to spawn modified copies.</p>
+
+      <h3>Simulation</h3>
+
+      <div class="signature">from sir.simulation import simulate</div>
+
+      <pre>result = simulate(
+    cfg, interventions=[], rng=np.random.default_rng(0),
+    initial_infected=10,
+)</pre>
+
+      <p>Returns a <code>SimResult</code> with histories of S, I, R, V (each length T+1), <code>new_infections_history</code> (scalar per day), <code>new_infections_by_age</code> (T+1 × 7), a <code>WelfareLedger</code>, and the final <code>World</code>.</p>
+
+      <h3>Monte Carlo</h3>
+
+      <div class="signature">from sir.monte_carlo import run_mc</div>
+
+      <pre>result = run_mc(
+    cfg, interventions=[interventions...], n_runs=20,
+    base_seed=0, parallel=True,
+    healthcare=hc,  # optional; computes healthcare outcomes per run
+)</pre>
+
+      <p>Returns an <code>MCResult</code>: histories stacked into (n_runs, T+1) arrays, plus <code>welfare_totals</code> and (if <code>healthcare=</code> is provided) a <code>healthcare_outcomes</code> list of <code>HealthcareOutcomes</code> per run.</p>
+
+      <p><code>parallel=True</code> uses <code>ProcessPoolExecutor</code> across all cores. As of v0.2, every intervention constructor produces pickle-safe objects so parallel works even with interventions enabled.</p>
+
+      <!-- ========== Interventions ========== -->
+      <h2 id="interventions">6. Interventions</h2>
+
+      <p>Interventions are time-windowed objects that modify group properties or move agents between states. There are two families of constructors:</p>
+
+      <h3>Setting-specific (in <code>sir.interventions</code>)</h3>
+
+      <table>
+        <thead><tr><th>Constructor</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>close_schools(start_day, end_day)</code></td><td>Deactivates all school groups; emits a learning-loss spillover cost</td></tr>
+          <tr><td><code>wfh_mandate(start_day, end_day, attendance_factor)</code></td><td>Scales workplace attendance by <code>attendance_factor</code> (e.g. 0.3 = 30%)</td></tr>
+          <tr><td><code>mask_mandate(start_day, end_day, target_types, p_factor)</code></td><td>Scales transmission probability by <code>p_factor</code> in specified group types</td></tr>
+          <tr><td><code>gathering_limit(start_day, end_day, max_size)</code></td><td>Scales attendance to 0.1× in any group above <code>max_size</code></td></tr>
+          <tr><td><code>event_ban(start_day, end_day)</code></td><td>Deactivates all one-off events</td></tr>
+          <tr><td><code>vaccinate_eldest_first(start_day, end_day, doses_per_day)</code></td><td>Each day moves <code>doses_per_day</code> oldest susceptibles to <code>V</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>Generic constructors (in <code>sir.comparison</code>)</h3>
+
+      <div class="signature">transmission_reduction(p_factor, window, targets=None, direct_cost_per_day=0)</div>
+
+      <p>Mask-style intervention that scales <code>group_p_mult</code> by <code>p_factor</code> in the given group types (default: all groups) during the window.</p>
+
+      <div class="signature">contact_reduction(people, events_per_week, encounters_per_event,
+                  window, target=None, spillover_cost_per_person_per_day=0)</div>
+
+      <p>X·Y·Z formulation: removes <code>(X · Y · Z) / 7</code> person-meetings per day. If <code>target</code> is given, the reduction concentrates in that group type; otherwise spread uniformly across all groups.</p>
+
+      <h4>Composing interventions</h4>
+      <p>Pass a list to <code>run_mc</code> or <code>run_comparison</code>. They are applied in order each day; effects on group properties compose (e.g. mask + WFH multiplies the relevant scalings).</p>
+
+      <h4>Pickle-safety</h4>
+      <p>All constructors return <code>Intervention</code> instances whose callables are module-level or <code>functools.partial</code> wrappers. They pickle cleanly and work with <code>parallel=True</code>.</p>
+
+      <!-- ========== Healthcare ========== -->
+      <h2 id="healthcare">7. Healthcare outcomes</h2>
+
+      <p>Healthcare outcomes (hospital, ICU, deaths, YLL) are post-processing — they are computed from the simulation's <code>new_infections_by_age</code> trajectory, not as additional disease states. This keeps the model fast and means you can adjust healthcare parameters without re-running simulations.</p>
+
+      <div class="signature">from sir.healthcare import HealthcareConfig, default_healthcare_config, compute_healthcare_outcomes</div>
+
+      <pre>hc_cfg = default_healthcare_config()
+# Returns a HealthcareConfig with v0.2 defaults:
+#   hosp_rate_by_age: (.005, .005, .01, .02, .03, .06, .20)
+#   icu_rate_by_age:  (.001, .001, .002, .004, .008, .020, .060)
+#   death_rate_by_age: (.0001, .0001, .0005, .001, .003, .01, .05)
+#   yll_per_death_by_age: (75, 65, 55, 45, 35, 25, 8)
+#   hosp_delay=8, icu_delay=11, death_delay=18
+#   hosp_los=7, icu_los=10</pre>
+
+      <p>Each 7-tuple corresponds to the age bins 0-9, 10-19, 20-29, 30-39, 40-49, 50-59, 60+. Compute outcomes from a single simulation:</p>
+
+      <pre>from sir.simulation import simulate
+import numpy as np
+result = simulate(cfg, interventions=[], rng=np.random.default_rng(0))
+hc_out = compute_healthcare_outcomes(result, hc_cfg)
+print(hc_out.total_deaths, hc_out.total_yll)</pre>
+
+      <p>Or wire it into Monte Carlo to compute per-run outcomes automatically:</p>
+
+      <pre>mc_result = run_mc(cfg, interventions=[], n_runs=20, healthcare=hc_cfg)
+deaths_per_run = [hc.total_deaths for hc in mc_result.healthcare_outcomes]</pre>
+
+      <h4>The math</h4>
+      <p>For age bin $a$:</p>
+      <ul>
+        <li>Daily admissions: $\text{hosp\_admit}_t = \sum_a \text{hosp\_rate}_a \cdot \text{new\_inf}_{a,\,t-\text{hosp\_delay}}$</li>
+        <li>Prevalence: rolling sum of admissions over the last $\text{hosp\_los}$ days</li>
+        <li>Deaths: same pattern with $\text{death\_rate}$ and $\text{death\_delay}$</li>
+        <li>YLL: $\text{total\_yll} = \sum_a \text{total\_deaths}_a \cdot \text{yll\_per\_death}_a$</li>
+      </ul>
+
+      <!-- ========== Comparison ========== -->
+      <h2 id="comparison">8. Comparison wrapper</h2>
+
+      <p>The high-level API:</p>
+
+      <div class="signature">from sir.comparison import run_comparison
+
+result = run_comparison(
+    cfg, interventions, n_runs, n_psa_samples=1,
+    base_seed=0, initial_infected=10,
+    healthcare=None, parallel=True,
+)</div>
+
+      <p>Runs <code>n_runs</code> simulations of <em>baseline</em> (no interventions) and <code>n_runs</code> simulations of <em>treatment</em> (your interventions) with paired seeds — so the same RNG state seeds each baseline/treatment pair, and the only systematic difference is the intervention.</p>
+
+      <h4><code>ComparisonResult</code></h4>
+      <p>The returned object holds the underlying <code>MCResult</code>s plus optional healthcare outcomes. The most useful methods:</p>
+
+      <pre>df = result.outcome_deltas()
+# pd.DataFrame indexed by outcome:
+#   peak_I, final_attack_rate, welfare
+#   total_deaths, total_yll, peak_hosp_prev, peak_icu_prev  (if healthcare=...)
+# Columns: baseline, treatment, delta, delta_pct, ci_lo, ci_hi</pre>
+
+      <h4>Paired-seed design</h4>
+      <p>For each (PSA sample, MC index) pair, baseline and treatment share the same RNG seed. This means each delta is a paired difference, which reduces variance compared to independent seeds. CIs reported by <code>outcome_deltas()</code> are 2.5/97.5 percentiles of the delta distribution across runs.</p>
+
+      <!-- ========== Uncertainty ========== -->
+      <h2 id="uncertainty">9. Uncertainty (PSA)</h2>
+
+      <p>Any intervention parameter can be a probability distribution rather than a fixed value. When <code>run_comparison</code> detects this, it switches on probabilistic sensitivity analysis: outer-loop samples of intervention parameters, inner-loop MC over seeds.</p>
+
+      <div class="signature">from sir.distributions import dist
+# Fluent constructors for inline use:
+#   dist.normal(mean=, sd=)
+#   dist.lognormal(mu=, sigma=)
+#   dist.uniform(lo, hi)
+#   dist.beta(a=, b=)
+#   dist.triangular(lo=, mode=, hi=)
+#   dist.ci95(lo, hi, family="normal")  # CI shorthand
+#   dist.fixed(value)</div>
+
+      <pre>from sir.comparison import transmission_reduction, run_comparison
+from sir.distributions import dist
+
+interventions = [
+    transmission_reduction(
+        p_factor=dist.beta(a=8, b=8),    # mean 0.5, sd ~0.12
+        window=(20, 120),
+    ),
+]
+
+result = run_comparison(
+    cfg, interventions=interventions,
+    n_runs=10, n_psa_samples=30,
+    initial_infected=10, healthcare=hc_cfg,
+)
+print(result.outcome_deltas())
+print(result.intervention_samples)   # the 30 parameter draws</pre>
+
+      <p>The PSA loop draws all uncertain parameters jointly per outer iteration, then runs <code>n_runs × 2</code> simulations (baseline + treatment) for that draw. With <code>n_psa_samples=30</code> and <code>n_runs=10</code>, that's 600 total simulations.</p>
+
+      <h4>PSA over disease/behavioral parameters</h4>
+      <p>For uncertainty on disease parameters (not intervention strength), use the older PSA workflow with a TOML spec via <code>sir.psa.load_psa_spec</code> and <code>sir.psa.run_psa</code>. The comparison wrapper handles intervention parameters; the older PSA covers everything else.</p>
+
+      <!-- ========== Welfare ========== -->
+      <h2 id="welfare">10. Welfare accounting</h2>
+
+      <p>Welfare is the signed sum of six components:</p>
+
+      <table>
+        <thead><tr><th>Component</th><th>Sign</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr><td><code>attendance_utility</code></td><td>+</td><td>$\sum_g \alpha_g \log(1 + m_g)$ summed over agents and time</td></tr>
+          <tr><td><code>precaution_cost</code></td><td>−</td><td>$\tfrac{1}{2}\kappa e^2$ per agent per day</td></tr>
+          <tr><td><code>infection_cost</code></td><td>−</td><td>$V_a$ per new infection</td></tr>
+          <tr><td><code>vaccination_cost</code></td><td>−</td><td>$c_{\text{vax}}$ per newly vaccinated agent</td></tr>
+          <tr><td><code>direct_policy_cost</code></td><td>−</td><td>Admin/enforcement, set by each intervention</td></tr>
+          <tr><td><code>spillover_policy_cost</code></td><td>−</td><td>e.g. learning loss from school closures</td></tr>
+        </tbody>
+      </table>
+
+      <p>The <code>WelfareLedger</code> on each <code>SimResult</code> has a <code>totals</code> dict and a <code>by_day</code> list with per-day breakdowns. Access:</p>
+
+      <pre>result.welfare.total_welfare()                # signed sum
+result.welfare.totals["infection_cost"]       # individual component
+result.welfare.by_day[10]                     # day-10 breakdown</pre>
+
+      <p>The <code>MCResult.welfare_components</code> dict gives per-run arrays of each component.</p>
+
+      <!-- ========== Math notes ========== -->
+      <h2 id="math">11. Mathematical notes</h2>
+
+      <p>This section sketches the math; the interactive demo's <a href="index.html#detailed">Detailed</a> tab has the canonical reference.</p>
+
+      <h3>Transmission</h3>
+      <p>Per-susceptible per-day infection probability under the Reed–Frost form:</p>
+
+      $$\pi_t = 1 - (1 - p)^{m \cdot I_t / N}$$
+
+      <p>derived from: $m$ daily meetings, each meeting partner infected with probability $I_t/N$, each such meeting transmitting with probability $p$. For small $p \cdot m \cdot I/N$ this reduces to the standard mass-action $\beta I/N$ with $\beta = mp$. The basic reproduction number:</p>
+
+      $$R_0 = \frac{m \cdot p}{\gamma}$$
+
+      <h3>FOC</h3>
+      <p>The behavioral choice problem has closed-form first-order conditions. Define $A = \sum_{\text{vol}} p_g m_g (I_g/N_g)$ (exposure intensity from voluntary groups) and $B = \sum_{\text{inst}} p_g m_g (I_g/N_g)$ (institutional groups, not choosable). Then:</p>
+
+      $$e^* = \min\!\left(1,\; \frac{V_a (\theta A + B)}{\kappa}\right), \qquad \frac{\alpha_g m_g}{1 + \theta m_g} = V_a (1 - e^*) A$$
+
+      <p>The second equation is solved in 1-D for $\theta$ via <code>scipy.optimize.brentq</code> with corner-solution handling.</p>
+
+      <h3>Bipartite contact network</h3>
+      <p>Agents are members of multiple groups. Each group $g$ has a per-meeting transmission probability $p_g$, baseline attendance $\bar m_g$, and a current attendance multiplier (set by interventions and behavior). The daily hazard for a susceptible $i$ in groups $\mathcal{G}(i)$:</p>
+
+      $$\text{hazard}_{i,t} = \sum_{g \in \mathcal{G}(i)} a_{i,g,t} \cdot p_g \cdot (1 - e_i) \cdot \frac{I_{g,t}}{N_g}$$
+
+      <p>Infection probability: $1 - \exp(-\text{hazard}_{i,t})$.</p>
+
+      <!-- ========== Calibration ========== -->
+      <h2 id="calibration">12. Calibration</h2>
+
+      <p>The default parameters target an $R_0 \approx 2.5$ respiratory pathogen, but they're illustrative — not derived from a specific real-world disease. If you want to model a particular pathogen, you'll typically want to adjust:</p>
+
+      <table>
+        <thead><tr><th>Parameter</th><th>Where</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>$\gamma$</td><td><code>ScenarioConfig.gamma</code></td><td>$1/\gamma$ = mean infectious period</td></tr>
+          <tr><td>$p_g$ per group type</td><td><code>ScenarioConfig.group_p_baseline</code></td><td>Sum × $\bar m$ / $\gamma$ should give your target $R_0$</td></tr>
+          <tr><td>$V_a$ per age bin</td><td><code>ScenarioConfig.V_a</code></td><td>Drives behavioral response; higher = more cautious</td></tr>
+          <tr><td>Healthcare rates</td><td><code>HealthcareConfig.*_by_age</code></td><td>Independent of disease dynamics; tune freely</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout note">
+        <strong>Identifiability caveat.</strong> $m$ and $p$ are not separately identifiable from epidemic case data alone — only the product matters. To pin them down you need outside information (contact diaries for $m$; lab transmission studies for $p$). The package's separation is for <em>policy interpretation</em>, not because the data can distinguish them.
+      </div>
+
+      <h3>The behavioral parameters</h3>
+      <p>The FOC needs $\alpha_g$ (utility weights), $\kappa$ (precaution cost), $V_a$ (infection cost). These are taste parameters that should be calibrated against observed behavioral data: how much did contacts actually drop during past outbreaks, how much did mask compliance rise, etc.</p>
+
+      <p>The default $\alpha_g$ values are tuned so that with no disease, every agent chooses $\theta=1$ (their baseline attendance). Under typical $V_a$ values, behavioral response is modest in absolute terms but significant relative to the no-behavior counterfactual. To see this, run the simulation with <code>behavioral=False</code> as a baseline.</p>
+
+      <!-- ========== Limits ========== -->
+      <h2 id="limits">13. Scope and limitations</h2>
+
+      <ul>
+        <li><strong>Myopic optimization.</strong> Agents react to current prevalence, not anticipated future paths. Real populations often pre-empt waves.</li>
+        <li><strong>Rational expectations.</strong> Agents observe true prevalence, not lagged or media-distorted signals. Real populations over-react early and under-react late.</li>
+        <li><strong>Generic respiratory pathogen.</strong> Defaults are not calibrated to a specific real disease.</li>
+        <li><strong>Healthcare is post-processing.</strong> No capacity-dependent mortality, no hospital→ICU transition dynamics.</li>
+        <li><strong>Exogenous vaccination.</strong> Vaccination is policy-controlled; agents do not choose to vaccinate.</li>
+        <li><strong>One welfare measure.</strong> The 6-component decomposition reflects modeling choices; other formulations (e.g. equity-weighted, or splitting morbidity from mortality) are not implemented.</li>
+        <li><strong>Atomism.</strong> Agents take aggregate prevalence as exogenous. This is what generates the externality but means no individual game theory between agents.</li>
+      </ul>
+
+      <p>These are all intentional simplifications for v0.2. For policy use, each would need to be considered carefully.</p>
+
+      <!-- ========== Citing ========== -->
+      <h2 id="citing">14. Citing</h2>
+
+      <p>If you build on this work academically, please cite:</p>
+
+      <pre>Melberg, H. O. (2026). sir: a microfounded agent-based SIR model with
+intervention and welfare analysis. https://github.com/hmelberg/sir</pre>
+
+      <p>This is an experimental, AI-assisted project; it is suitable for methodology demonstration and teaching, not for policy. See the disclaimer above.</p>
+
+      <p style="margin-top: 3rem;">
+        <a href="index.html">← Back to interactive demo</a>
+        &nbsp;·&nbsp;
+        <a href="https://github.com/hmelberg/sir">View source on GitHub →</a>
+      </p>
+    </main>
+  </div>
+
+  <footer>
+    Built with Pyodide, Plotly, and MathJax. Source: <a href="https://github.com/hmelberg/sir">github.com/hmelberg/sir</a>
+  </footer>
+
+  <script>
+    // Smooth scroll for TOC links
+    document.querySelectorAll('aside.toc a[href^="#"]').forEach(a => {
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        const id = a.getAttribute('href').slice(1);
+        const el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    // Highlight current TOC item on scroll
+    const sections = Array.from(document.querySelectorAll('main h2[id]'));
+    const tocLinks = Array.from(document.querySelectorAll('aside.toc a[href^="#"]'));
+    function onScroll() {
+      const y = window.scrollY + 120;
+      let current = sections[0]?.id;
+      for (const s of sections) {
+        if (s.offsetTop <= y) current = s.id;
+      }
+      tocLinks.forEach(a => {
+        a.style.color = a.getAttribute('href') === '#' + current ? 'var(--accent)' : '';
+        a.style.fontWeight = a.getAttribute('href') === '#' + current ? '600' : '';
+      });
+    }
+    window.addEventListener('scroll', onScroll);
+    onScroll();
+  </script>
+</body>
+</html>
