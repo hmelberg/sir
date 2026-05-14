@@ -9,6 +9,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from sir.simulation import SimResult
+
 
 @dataclass(frozen=True)
 class HealthcareConfig:
@@ -42,9 +44,6 @@ def default_healthcare_config() -> HealthcareConfig:
         death_rate_by_age=(0.0001, 0.0001, 0.0005, 0.001, 0.003, 0.01, 0.05),
         yll_per_death_by_age=(75.0, 65.0, 55.0, 45.0, 35.0, 25.0, 8.0),
     )
-
-
-from sir.simulation import SimResult
 
 
 @dataclass

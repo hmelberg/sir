@@ -1,6 +1,18 @@
 import numpy as np
+import pandas as pd
 
-from sir.comparison import ComparisonResult
+from sir.comparison import (
+    ComparisonResult,
+    contact_reduction,
+    run_comparison,
+    transmission_reduction,
+)
+from sir.config import default_config
+from sir.constants import GroupType
+from sir.distributions import dist
+from sir.healthcare import default_healthcare_config
+from sir.interventions import Intervention, apply_interventions
+from sir.world import build_world
 
 
 def test_comparison_result_is_constructible():
@@ -15,13 +27,6 @@ def test_comparison_result_is_constructible():
     )
     assert cr.baseline_results == []
     assert cr.treatment_results == []
-
-
-from sir.comparison import transmission_reduction
-from sir.constants import GroupType
-from sir.config import default_config
-from sir.interventions import Intervention, apply_interventions
-from sir.world import build_world
 
 
 def test_transmission_reduction_returns_intervention():
@@ -66,7 +71,6 @@ def test_transmission_reduction_inactive_outside_window():
     assert np.allclose(world.group_p_mult, 1.0)
 
 
-from sir.comparison import contact_reduction
 
 
 def test_contact_reduction_returns_intervention():
@@ -122,8 +126,6 @@ def test_contact_reduction_zero_people_no_effect():
     assert np.allclose(world.group_attendance_mult, 1.0)
 
 
-from sir.comparison import run_comparison
-from sir.healthcare import default_healthcare_config
 
 
 def test_run_comparison_returns_result():
@@ -169,7 +171,6 @@ def test_run_comparison_with_healthcare():
     assert len(result.baseline_healthcare[0]) == 2
 
 
-from sir.distributions import dist
 
 
 def test_contact_reduction_with_distribution_returns_uncertain():
@@ -219,7 +220,7 @@ def test_uncertain_intervention_samples_are_reproducible():
             assert s1[k] == s2[k]
 
 
-import pandas as pd
+
 
 
 def test_outcome_deltas_returns_dataframe():

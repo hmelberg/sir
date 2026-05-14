@@ -3,6 +3,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+from sir.comparison import ComparisonResult
+from sir.healthcare import HealthcareOutcomes
 from sir.monte_carlo import MCResult
 
 
@@ -96,10 +98,6 @@ def plot_welfare_totals(
     ax.set_title(title)
     ax.grid(True, alpha=0.3, axis="y")
     return fig
-
-
-from sir.comparison import ComparisonResult
-from sir.healthcare import HealthcareOutcomes
 
 
 def plot_healthcare_curves(

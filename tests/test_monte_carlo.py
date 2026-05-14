@@ -1,6 +1,7 @@
 import numpy as np
 
 from sir.config import default_config
+from sir.healthcare import default_healthcare_config
 from sir.monte_carlo import MCResult, run_mc
 
 
@@ -24,9 +25,6 @@ def test_mc_summary_statistics():
     result = run_mc(cfg, interventions=[], n_runs=5, base_seed=0, initial_infected=10)
     mean_S = result.S_history.mean(axis=0)
     assert mean_S.shape == (cfg.T + 1,)
-
-
-from sir.healthcare import default_healthcare_config
 
 
 def test_mc_returns_healthcare_when_requested():
