@@ -91,11 +91,13 @@ def step_transmission(
     infected_attended_per_group = np.bincount(
         m_group_id, weights=attendance_for_row * is_infected_row, minlength=G
     )
-    # Avoid divide-by-zero
-    prevalence_per_group = np.where(
-        attended_per_group > 0,
-        infected_attended_per_group / attended_per_group,
-        0.0,
+    # Compute prevalence only where attended > 0, leaving zero elsewhere.
+    # Using np.divide with `where=` avoids the RuntimeWarning from dividing by zero.
+    prevalence_per_group = np.divide(
+        infected_attended_per_group,
+        attended_per_group,
+        out=np.zeros_like(attended_per_group, dtype=np.float64),
+        where=attended_per_group > 0,
     )
 
     # Per-membership hazard contribution
