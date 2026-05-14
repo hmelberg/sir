@@ -303,48 +303,22 @@
       color: white;
     }
 
-    .info[data-tip]::after {
-      content: attr(data-tip);
-      position: absolute;
-      top: 50%;
-      left: calc(100% + 8px);
-      transform: translateY(-50%);
-      width: 240px;
-      padding: 0.55rem 0.7rem;
+    /* Floating tooltip: single shared element positioned by JS */
+    #tooltip {
+      position: fixed;
+      display: none;
+      width: 260px;
+      padding: 0.6rem 0.75rem;
       background: #1c1917;
       color: white;
-      font-size: 0.78rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.8rem;
       font-weight: 400;
       line-height: 1.45;
       border-radius: 6px;
+      z-index: 9999;
       pointer-events: none;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.12s, visibility 0.12s;
-      z-index: 100;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      white-space: normal;
-      text-align: left;
-    }
-
-    .info[data-tip]::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: calc(100% + 2px);
-      transform: translateY(-50%);
-      border: 6px solid transparent;
-      border-right-color: #1c1917;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.12s, visibility 0.12s;
-      z-index: 100;
-    }
-
-    .info:hover[data-tip]::after,
-    .info:hover[data-tip]::before {
-      opacity: 1;
-      visibility: visible;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
     }
 
     .toggle-row {
@@ -889,6 +863,56 @@
 
         <div class="effect-readout" id="cint-readout">Removes <strong>—</strong> meetings/day → effective m₀ drops by <strong>—</strong></div>
 
+        <h3>Healthcare burden</h3>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Hospitalization rate (% of infections) <span class="info" data-tip="Fraction of infected people who require hospital admission. Typical respiratory pathogens: 1–5% overall, much higher for elderly (10–30% for 70+).">?</span></span>
+            <span class="value" id="val-hosprate">2.0%</span>
+          </div>
+          <input type="range" id="ctl-hosprate" min="0.1" max="20" step="0.1" value="2.0" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">ICU rate (% of infections) <span class="info" data-tip="Fraction of infected people who require intensive care. Typically 10–25% of hospitalizations, so 0.1–1% of infections for moderate pathogens.">?</span></span>
+            <span class="value" id="val-icurate">0.4%</span>
+          </div>
+          <input type="range" id="ctl-icurate" min="0.01" max="5" step="0.01" value="0.4" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Days infection → hospital <span class="info" data-tip="Mean lag from infection to hospital admission. Includes incubation + symptom onset + worsening. Typical: 7–10 days for COVID-like.">?</span></span>
+            <span class="value" id="val-hospdelay">8</span>
+          </div>
+          <input type="range" id="ctl-hospdelay" min="1" max="21" step="1" value="8" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Days infection → ICU <span class="info" data-tip="Mean lag from infection to ICU admission. Usually a few days longer than hospital admission. Typical: 10–14 days.">?</span></span>
+            <span class="value" id="val-icudelay">11</span>
+          </div>
+          <input type="range" id="ctl-icudelay" min="1" max="28" step="1" value="11" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Hospital length of stay <span class="info" data-tip="Mean days a hospitalized patient stays in hospital. Used to compute prevalence (beds occupied) from incidence (admissions). Typical: 5–10 days.">?</span></span>
+            <span class="value" id="val-hosplos">7</span>
+          </div>
+          <input type="range" id="ctl-hosplos" min="1" max="30" step="1" value="7" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">ICU length of stay <span class="info" data-tip="Mean days an ICU patient stays in intensive care. Usually longer than general hospital stays. Typical: 7–14 days.">?</span></span>
+            <span class="value" id="val-iculos">10</span>
+          </div>
+          <input type="range" id="ctl-iculos" min="1" max="45" step="1" value="10" />
+        </div>
+
         <button class="run-btn" id="run-btn" disabled>Loading Python…</button>
         <button class="reset-btn" id="reset-btn">Reset to defaults</button>
 
@@ -924,6 +948,16 @@
           <h4>Behavioral response over time</h4>
           <div id="plot-behavior" class="plot plot-small"></div>
         </div>
+
+        <div class="plot-card">
+          <h4>Microfounded vs. traditional SIR — infected curve</h4>
+          <div id="plot-compare" class="plot plot-small"></div>
+        </div>
+
+        <div class="plot-card">
+          <h4>Healthcare burden — hospital and ICU</h4>
+          <div id="plot-hospital" class="plot"></div>
+        </div>
       </section>
     </div>
   </main>
@@ -932,8 +966,48 @@
     Built with Pyodide and Plotly. Full Python implementation (including the multi-group bipartite ABM, vaccination, PSA, and welfare decomposition) is in the underlying <code>sir</code> package.
   </footer>
 
+  <div id="tooltip" role="tooltip"></div>
+
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
   <script>
+    // ============================ Tooltip ============================
+
+    const tooltipEl = document.getElementById('tooltip');
+
+    function showTooltip(targetEl, text) {
+      tooltipEl.textContent = text;
+      tooltipEl.style.display = 'block';
+      const r = targetEl.getBoundingClientRect();
+      const tw = tooltipEl.offsetWidth;
+      const th = tooltipEl.offsetHeight;
+      const margin = 10;
+      // Prefer right of target; flip to left if it would overflow viewport
+      let x = r.right + 10;
+      if (x + tw > window.innerWidth - margin) x = r.left - tw - 10;
+      if (x < margin) x = margin;
+      // Vertically center; clamp to viewport
+      let y = r.top + r.height / 2 - th / 2;
+      if (y < margin) y = margin;
+      if (y + th > window.innerHeight - margin) y = window.innerHeight - th - margin;
+      tooltipEl.style.left = x + 'px';
+      tooltipEl.style.top = y + 'px';
+    }
+
+    function hideTooltip() {
+      tooltipEl.style.display = 'none';
+    }
+
+    function bindTooltips(root = document) {
+      root.querySelectorAll('.info[data-tip]').forEach(el => {
+        if (el._tipBound) return;
+        el._tipBound = true;
+        el.addEventListener('mouseenter', () => showTooltip(el, el.dataset.tip));
+        el.addEventListener('mouseleave', hideTooltip);
+        el.addEventListener('focus', () => showTooltip(el, el.dataset.tip));
+        el.addEventListener('blur', hideTooltip);
+      });
+    }
+
     // ============================ Tab navigation ============================
 
     const tabs = document.querySelectorAll('nav button');
@@ -958,7 +1032,8 @@
 
     const ids = ['N', 'T', 'I0', 'm0', 'p', 'gamma', 'V', 'alpha', 'kappa',
                  'istart', 'iend', 'ifactor',
-                 'cx', 'cy', 'cstart', 'cend'];
+                 'cx', 'cy', 'cstart', 'cend',
+                 'hosprate', 'icurate', 'hospdelay', 'icudelay', 'hosplos', 'iculos'];
     const valEls = {};
     const ctlEls = {};
     for (const id of ids) {
@@ -993,6 +1068,8 @@
       if (id === 'alpha' || id === 'kappa') return num.toFixed(2);
       if (id === 'ifactor') return num.toFixed(2) + '×';
       if (id === 'cy') return num.toFixed(1);
+      if (id === 'hosprate') return num.toFixed(1) + '%';
+      if (id === 'icurate') return num.toFixed(2) + '%';
       if ((id === 'm0' || id === 'cx') && num % 1 !== 0) return num.toFixed(1);
       return String(Math.round(num));
     }
@@ -1061,6 +1138,7 @@
     });
 
     updateLabels();
+    bindTooltips();
 
     // ============================ Pyodide ============================
 
@@ -1102,7 +1180,8 @@ def _solve_foc(alpha, kappa, V, m0, p_eff, prev):
 
 def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
              behavioral, intervention_on, istart, iend, ifactor,
-             contact_on, cstart, cend, cx, cy):
+             contact_on, cstart, cend, cx, cy,
+             hosp_rate, icu_rate, hosp_delay, icu_delay, hosp_los, icu_los):
     T = int(T)
     N = float(N)
     S = np.zeros(T + 1)
@@ -1129,8 +1208,6 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
             p_eff = p * ifactor
 
         # Contact-reduction intervention reduces m0 (population-average meetings/day)
-        # X people × Y meetings/week = X*Y/7 meetings/day removed
-        # Divided by N → reduction in population-average m0
         m0_eff = m0
         if contact_on and cstart <= t < cend:
             reduction = (cx * cy) / 7.0 / N
@@ -1142,7 +1219,6 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
             theta, e = 1.0, 0.0
         m_eff = theta * m0_eff
         p_per_meeting = p_eff * (1.0 - e)
-        # Per-susceptible per-day infection probability
         pi = 1.0 - (1.0 - p_per_meeting) ** (m_eff * prev) if (m_eff * prev) > 0 else 0.0
         new_inf = pi * S[t]
         new_rec = gamma * I[t]
@@ -1153,7 +1229,6 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
         e_h[t] = e
         m0_eff_h[t] = m0_eff
         new_inf_h[t] = new_inf
-        # Welfare accumulation (per agent, summed across N)
         attendance_util += N * alpha * np.log1p(m_eff)
         precaution_cost += N * 0.5 * kappa * e * e
         infection_cost += V * new_inf
@@ -1162,6 +1237,38 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
     e_h[-1] = e_h[-2] if T > 0 else 0.0
     m0_eff_h[-1] = m0_eff_h[-2] if T > 0 else m0
     new_inf_h[-1] = 0.0
+
+    # Traditional SIR: simple mass-action with beta = m0 * p (no behavior, no interventions)
+    beta_trad = m0 * p
+    S_t = np.zeros(T + 1); I_t = np.zeros(T + 1); R_t = np.zeros(T + 1)
+    S_t[0] = N - I0; I_t[0] = I0
+    for t in range(T):
+        new = beta_trad * S_t[t] * I_t[t] / N
+        rec = gamma * I_t[t]
+        # Clamp to avoid negative S in extreme parameter regimes
+        new = min(new, S_t[t])
+        S_t[t + 1] = S_t[t] - new
+        I_t[t + 1] = I_t[t] + new - rec
+        R_t[t + 1] = R_t[t] + rec
+
+    # Healthcare burden: lag new infections, then sum over LOS for prevalence
+    hd = int(hosp_delay); ud = int(icu_delay)
+    hl = max(1, int(hosp_los)); ul = max(1, int(icu_los))
+    hosp_admit = np.zeros(T + 1)
+    icu_admit = np.zeros(T + 1)
+    for t in range(T + 1):
+        if t - hd >= 0:
+            hosp_admit[t] = hosp_rate * new_inf_h[t - hd]
+        if t - ud >= 0:
+            icu_admit[t] = icu_rate * new_inf_h[t - ud]
+    # Prevalence = sum of admissions in last LOS days
+    hosp_prev = np.zeros(T + 1)
+    icu_prev = np.zeros(T + 1)
+    for t in range(T + 1):
+        lo = max(0, t - hl + 1)
+        hosp_prev[t] = hosp_admit[lo:t + 1].sum()
+        lo2 = max(0, t - ul + 1)
+        icu_prev[t] = icu_admit[lo2:t + 1].sum()
 
     welfare = attendance_util - precaution_cost - infection_cost
     return {
@@ -1172,7 +1279,15 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
         "e": e_h.tolist(),
         "m0_eff": m0_eff_h.tolist(),
         "new_inf": new_inf_h.tolist(),
+        "I_trad": I_t.tolist(),
+        "hosp_admit": hosp_admit.tolist(),
+        "hosp_prev": hosp_prev.tolist(),
+        "icu_admit": icu_admit.tolist(),
+        "icu_prev": icu_prev.tolist(),
         "peak_I": float(I.max()),
+        "peak_I_trad": float(I_t.max()),
+        "peak_hosp_prev": float(hosp_prev.max()),
+        "peak_icu_prev": float(icu_prev.max()),
         "final_R": float(R[-1]),
         "attendance_util": float(attendance_util),
         "precaution_cost": float(precaution_cost),
@@ -1235,6 +1350,12 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
         cend: get('cend'),
         cx: get('cx'),
         cy: get('cy'),
+        hosp_rate: get('hosprate') / 100,
+        icu_rate: get('icurate') / 100,
+        hosp_delay: get('hospdelay'),
+        icu_delay: get('icudelay'),
+        hosp_los: get('hosplos'),
+        icu_los: get('iculos'),
       };
     }
 
@@ -1257,6 +1378,9 @@ r = simulate(
     contact_on=_inp['contact_on'],
     cstart=_inp['cstart'], cend=_inp['cend'],
     cx=_inp['cx'], cy=_inp['cy'],
+    hosp_rate=_inp['hosp_rate'], icu_rate=_inp['icu_rate'],
+    hosp_delay=_inp['hosp_delay'], icu_delay=_inp['icu_delay'],
+    hosp_los=_inp['hosp_los'], icu_los=_inp['icu_los'],
 )
 json.dumps(r)
 `);
@@ -1325,6 +1449,44 @@ json.dumps(r)
         shapes: bands,
       };
       Plotly.react('plot-behavior', behData, behLayout, { responsive: true, displayModeBar: false });
+
+      // Comparison plot: microfounded vs traditional SIR (infected)
+      const cmpData = [
+        { x: days, y: data.I, name: 'Microfounded (this model)', line: { color: getCSSVar('--i-color'), width: 2.5 } },
+        { x: days, y: data.I_trad, name: 'Traditional SIR (β=m·p, no behavior)', line: { color: '#78716c', width: 2, dash: 'dot' } },
+      ];
+      const cmpLayout = {
+        margin: { l: 50, r: 20, t: 10, b: 40 },
+        xaxis: { title: 'Day', gridcolor: '#f0f0f0' },
+        yaxis: { title: 'Infected', gridcolor: '#f0f0f0', tickformat: ',d' },
+        legend: { orientation: 'h', y: 1.15 },
+        font: { family: 'Inter, sans-serif', size: 12 },
+        paper_bgcolor: 'white', plot_bgcolor: 'white',
+        shapes: bands,
+      };
+      Plotly.react('plot-compare', cmpData, cmpLayout, { responsive: true, displayModeBar: false });
+
+      // Hospital + ICU plot
+      const hospData = [
+        { x: days, y: data.hosp_prev, name: 'Hospital prevalence (occupied beds)',
+          line: { color: '#0891b2', width: 2.5 }, fill: 'tozeroy', fillcolor: 'rgba(8, 145, 178, 0.10)' },
+        { x: days, y: data.icu_prev, name: 'ICU prevalence (occupied beds)',
+          line: { color: '#be123c', width: 2.5 }, fill: 'tozeroy', fillcolor: 'rgba(190, 18, 60, 0.10)' },
+        { x: days, y: data.hosp_admit, name: 'Hospital admissions (incidence)',
+          line: { color: '#0891b2', width: 1.5, dash: 'dash' } },
+        { x: days, y: data.icu_admit, name: 'ICU admissions (incidence)',
+          line: { color: '#be123c', width: 1.5, dash: 'dash' } },
+      ];
+      const hospLayout = {
+        margin: { l: 60, r: 20, t: 10, b: 40 },
+        xaxis: { title: 'Day', gridcolor: '#f0f0f0' },
+        yaxis: { title: 'People', gridcolor: '#f0f0f0', tickformat: ',d' },
+        legend: { orientation: 'h', y: 1.15, x: 0 },
+        font: { family: 'Inter, sans-serif', size: 12 },
+        paper_bgcolor: 'white', plot_bgcolor: 'white',
+        shapes: bands,
+      };
+      Plotly.react('plot-hospital', hospData, hospLayout, { responsive: true, displayModeBar: false });
 
       // Summary cards
       document.getElementById('sum-peak').textContent = Math.round(data.peak_I).toLocaleString();
