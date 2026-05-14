@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sir"
-version = "0.2.0"
+version = "0.3.0"
 description = "Microfounded agent-based SIR model with rational behavioral response, interventions, healthcare outcomes, and probabilistic sensitivity analysis"
 readme = "README.md"
 requires-python = ">=3.11"
