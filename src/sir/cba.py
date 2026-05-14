@@ -240,6 +240,20 @@ def compute_behavioral_loss(
     return float(discounted.sum()), discounted
 
 
+def compute_precaution_cost(
+    e_hist: np.ndarray,
+    N: int,
+    cfg: CBAConfig,
+    discount_rate: float,
+) -> tuple[float, np.ndarray]:
+    """Stream 8: Precaution effort cost, monetized via VOT."""
+    T = e_hist.size
+    raw = N * (e_hist ** 2) * cfg.value_of_time_per_hour * cfg.hours_per_meeting
+    factors = discount_factors(discount_rate, T)
+    discounted = raw * factors
+    return float(discounted.sum()), discounted
+
+
 @dataclass
 class CBAReport:
     streams: dict[str, float]

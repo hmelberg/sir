@@ -310,3 +310,23 @@ def test_behavioral_loss_proportional_to_theta_reduction():
     # Lost/day = 5 meetings × 1 hr × $25 = $125; over 10 days = $1250
     total, _ = compute_behavioral_loss(theta_hist, m_bar_total, cfg, discount_rate=0.0)
     assert np.isclose(total, 1250.0)
+
+
+from sir.cba import compute_precaution_cost
+
+
+def test_precaution_cost_zero_when_no_effort():
+    e_hist = np.zeros(10)
+    N = 10000
+    cfg = default_cba_config()
+    total, _ = compute_precaution_cost(e_hist, N, cfg, discount_rate=0.0)
+    assert total == 0.0
+
+
+def test_precaution_cost_scales_with_e_squared():
+    e_hist = np.full(10, 0.5)
+    N = 100
+    cfg = default_cba_config()
+    # 0.25 × 100 × 25 × 1 = 625/day; over 10 days = 6250
+    total, _ = compute_precaution_cost(e_hist, N, cfg, discount_rate=0.0)
+    assert np.isclose(total, 6250.0)
