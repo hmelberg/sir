@@ -13,3 +13,6 @@ dist/
 venv/
 .DS_Store
 *.ipynb_checkpoints
+
+# Demo script outputs
+output/
