@@ -103,3 +103,14 @@ def discount_factors(annual_rate: float, T: int) -> np.ndarray:
         return np.zeros(0, dtype=np.float64)
     days = np.arange(T, dtype=np.float64)
     return np.power(1.0 + annual_rate, -days / 365.0)
+
+
+@dataclass
+class CBAReport:
+    streams: dict[str, float]
+    units: dict[str, str]
+    total_monetary_cost: float
+    total_health_burden_yll: float
+    total_health_burden_qaly: float
+    total_cost_including_health: float | None
+    per_day: dict[str, np.ndarray]

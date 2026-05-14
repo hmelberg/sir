@@ -93,3 +93,20 @@ def test_discount_factor_compounds_daily():
     factors = discount_factors(annual_rate=0.03, T=730)
     # (1+0.03)^-2 ≈ 0.9426
     assert 0.94 < factors[729] < 0.945
+
+
+from sir.cba import CBAReport
+
+
+def test_cbareport_constructible():
+    rpt = CBAReport(
+        streams={"direct_medical": 1000.0},
+        units={"direct_medical": "$"},
+        total_monetary_cost=1000.0,
+        total_health_burden_yll=0.0,
+        total_health_burden_qaly=0.0,
+        total_cost_including_health=None,
+        per_day={"direct_medical": np.zeros(10)},
+    )
+    assert rpt.streams["direct_medical"] == 1000.0
+    assert rpt.total_monetary_cost == 1000.0
