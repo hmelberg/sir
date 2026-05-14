@@ -222,6 +222,24 @@ def compute_morbidity_qaly(
     return float(discounted.sum()), discounted
 
 
+def compute_behavioral_loss(
+    theta_hist: np.ndarray,
+    m_bar_total: float,
+    cfg: CBAConfig,
+    discount_rate: float,
+) -> tuple[float, np.ndarray]:
+    """Stream 7: Behavioral utility loss from reduced attendance.
+
+    Value EXCLUDES wages (stream 3) — only intrinsic/social contact value.
+    """
+    T = theta_hist.size
+    lost_meetings_per_day = (1.0 - theta_hist) * m_bar_total
+    raw = lost_meetings_per_day * cfg.hours_per_meeting * cfg.value_of_time_per_hour
+    factors = discount_factors(discount_rate, T)
+    discounted = raw * factors
+    return float(discounted.sum()), discounted
+
+
 @dataclass
 class CBAReport:
     streams: dict[str, float]

@@ -290,3 +290,23 @@ def test_morbidity_qaly_uses_disability_weights():
     total, _ = compute_morbidity_qaly(new_inf_by_age, hc_rates, icu_rates, cfg, discount_rate=0.0)
     expected = 100 * 0.15 * 7 / 365
     assert np.isclose(total, expected, rtol=1e-3)
+
+
+from sir.cba import compute_behavioral_loss
+
+
+def test_behavioral_loss_zero_when_no_reduction():
+    theta_hist = np.ones(10)
+    m_bar_total = 10.0
+    cfg = default_cba_config()
+    total, _ = compute_behavioral_loss(theta_hist, m_bar_total, cfg, discount_rate=0.0)
+    assert total == 0.0
+
+
+def test_behavioral_loss_proportional_to_theta_reduction():
+    theta_hist = np.full(10, 0.5)
+    m_bar_total = 10.0
+    cfg = default_cba_config()
+    # Lost/day = 5 meetings × 1 hr × $25 = $125; over 10 days = $1250
+    total, _ = compute_behavioral_loss(theta_hist, m_bar_total, cfg, discount_rate=0.0)
+    assert np.isclose(total, 1250.0)
