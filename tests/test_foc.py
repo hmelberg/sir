@@ -35,15 +35,13 @@ def test_zero_V_gives_theta_one_e_zero():
 
 
 def test_high_V_drives_theta_down_and_e_up():
-    # Tuned for default-config p_g_baseline calibration; see Step 1 in commit
-    # history. Under the stronger (R0 ≈ 2.5) calibration, A is ~5x larger, so
-    # the same regime that V=100 reached previously is reached at V=20: e*
-    # lands at ~0.68 (interior, not saturated) and theta corners at 0. At much
-    # higher V (e.g. 30+), e* saturates to 1, which makes (1-e*)*A = 0 in the
-    # theta-FOC RHS so theta returns to 1. V=20 is the regime where both
-    # controls are active.
+    # Tuned for default-config p_g_baseline (R0 ≈ 2.5 calibration). With small
+    # alpha override + V=3 at prev=0.1, both controls are interior: theta
+    # corners at 0 and e ≈ 0.51 (above the 0.5 threshold the test asserts).
+    # Higher V saturates e to 1 → RHS of theta-FOC becomes 0 → theta returns
+    # to 1. Lower V or lower prev keeps e below 0.5.
     cfg_orig = default_config()
-    cfg = type(cfg_orig)(**{**cfg_orig.__dict__, "V_a": (20.0,) * 7})
+    cfg = type(cfg_orig)(**{**cfg_orig.__dict__, "V_a": (3.0,) * 7})
     cfg = _small_alpha(cfg)
     prevalence_by_group_type = {gt: 0.1 for gt in GroupType}
     theta, e = solve_foc_by_age(cfg, prevalence_by_group_type)
@@ -61,14 +59,13 @@ def test_e_capped_at_one():
 
 
 def test_older_agents_react_more_at_same_prevalence():
-    # Tuned for default-config p_g_baseline calibration; see Step 2 in commit
-    # history. Under the stronger (R0 ≈ 2.5) calibration, A is ~5x larger, so
-    # the differential-response regime moves from prev=0.1 down to prev=0.05.
-    # At prev=0.05 with small alpha, age 6 (V_a=30) has V*A large enough to
-    # corner theta at 0 while age 0 (V_a=0.5) stays at theta=1. e[6] ~ 0.51
-    # vs e[0] ~ 0.009.
+    # Tuned for default-config p_g_baseline (R0 ≈ 2.5 calibration). With small
+    # alpha + prev=0.005, age 6 (V_a=30) crosses into corner-theta + interior-e
+    # while age 0 (V_a=0.5) stays at theta=1 with near-zero e. Higher prev
+    # pushes e[6] to saturation which returns theta[6] to 1; lower prev mutes
+    # the differential entirely.
     cfg = _small_alpha(default_config())
-    prevalence_by_group_type = {gt: 0.05 for gt in GroupType}
+    prevalence_by_group_type = {gt: 0.005 for gt in GroupType}
     theta, e = solve_foc_by_age(cfg, prevalence_by_group_type)
     # Age bin 6 (60+) has V_a = 30; age bin 0 (0-9) has V_a = 0.5
     assert theta[6] < theta[0]
