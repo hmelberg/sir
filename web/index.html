@@ -358,6 +358,40 @@
       margin-bottom: 0;
     }
 
+    .select {
+      width: 100%;
+      padding: 0.4rem 0.5rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+    }
+
+    .select:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: -1px;
+    }
+
+    .effect-readout {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+      padding: 0.45rem 0.6rem;
+      background: #f5f5f4;
+      border-left: 2px solid var(--accent);
+      border-radius: 3px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .effect-readout strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
     .control input[type="range"] {
       width: 100%;
       accent-color: var(--accent);
@@ -761,14 +795,14 @@
           <input type="range" id="ctl-kappa" min="0.1" max="5" step="0.1" value="1.0" />
         </div>
 
-        <h3>Intervention</h3>
+        <h3>Mask mandate <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--muted);">— reduces $p$</span></h3>
 
         <div class="toggle-row">
           <label class="control-toggle">
             <input type="checkbox" id="ctl-int-on" />
-            Mask mandate (reduce $p$)
+            Enable mask mandate
           </label>
-          <span class="info" data-tip="Mandated reduction in per-meeting transmission probability during a fixed window — e.g., masks, ventilation rules, capacity limits. Shaded on the plots.">?</span>
+          <span class="info" data-tip="Mandated reduction in per-meeting transmission probability during a fixed window — masks, ventilation rules, capacity limits. Shaded orange on the plots.">?</span>
         </div>
 
         <div class="control">
@@ -794,6 +828,66 @@
           </div>
           <input type="range" id="ctl-ifactor" min="0.05" max="1.0" step="0.05" value="0.5" />
         </div>
+
+        <h3>Contact reduction <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--muted);">— reduces $m_0$</span></h3>
+
+        <div class="toggle-row">
+          <label class="control-toggle">
+            <input type="checkbox" id="ctl-cint-on" />
+            Cancel an activity
+          </label>
+          <span class="info" data-tip="Remove a recurring activity (e.g., school, office, sports, worship) from the population's meeting pool. Shaded green on the plots.">?</span>
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Preset <span class="info" data-tip="Common interventions with plausible numbers. Selecting a preset fills the X and Y sliders; you can fine-tune after.">?</span></span>
+          </div>
+          <select id="ctl-cpreset" class="select">
+            <option value="custom">Custom</option>
+            <option value="soccer">Cancel soccer practice (1000 ppl, 3/wk × ~5 contacts)</option>
+            <option value="school">Close schools (2500 ppl, 5/wk × ~10 contacts)</option>
+            <option value="office">Close large office (500 ppl, 5/wk × ~15 contacts)</option>
+            <option value="restaurants">Close restaurants (3000 ppl, 3/wk × ~3 contacts)</option>
+            <option value="worship">Suspend worship gatherings (800 ppl, 1/wk × ~5 contacts)</option>
+            <option value="concert">Ban large concerts (5000 ppl, 0.5/wk × ~3 contacts)</option>
+            <option value="lockdown">Hard lockdown (8000 ppl, 7/wk × ~8 contacts)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">People affected $X$ <span class="info" data-tip="Number of people who would normally attend the cancelled activity. Capped at population N.">?</span></span>
+            <span class="value" id="val-cx">1000</span>
+          </div>
+          <input type="range" id="ctl-cx" min="0" max="10000" step="100" value="1000" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Meetings/week $Y$ <span class="info" data-tip="Person-meeting events removed per week per affected person. Multiply sessions/week by typical contacts per session: e.g., school = 5 days × ~10 close contacts = 50/wk; weekly choir of 20 people = ~20/wk; soccer practice 3×/wk with 5 close contacts each = 15/wk.">?</span></span>
+            <span class="value" id="val-cy">15</span>
+          </div>
+          <input type="range" id="ctl-cy" min="0.5" max="80" step="0.5" value="15" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Start day <span class="info" data-tip="When the contact-reduction intervention begins.">?</span></span>
+            <span class="value" id="val-cstart">20</span>
+          </div>
+          <input type="range" id="ctl-cstart" min="0" max="500" step="1" value="20" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">End day <span class="info" data-tip="When the contact-reduction intervention ends.">?</span></span>
+            <span class="value" id="val-cend">120</span>
+          </div>
+          <input type="range" id="ctl-cend" min="10" max="600" step="1" value="120" />
+        </div>
+
+        <div class="effect-readout" id="cint-readout">Removes <strong>—</strong> meetings/day → effective m₀ drops by <strong>—</strong></div>
 
         <button class="run-btn" id="run-btn" disabled>Loading Python…</button>
         <button class="reset-btn" id="reset-btn">Reset to defaults</button>
@@ -863,7 +957,8 @@
     // ============================ Slider plumbing ============================
 
     const ids = ['N', 'T', 'I0', 'm0', 'p', 'gamma', 'V', 'alpha', 'kappa',
-                 'istart', 'iend', 'ifactor'];
+                 'istart', 'iend', 'ifactor',
+                 'cx', 'cy', 'cstart', 'cend'];
     const valEls = {};
     const ctlEls = {};
     for (const id of ids) {
@@ -872,9 +967,24 @@
     }
     const behavioralEl = document.getElementById('ctl-behavioral');
     const intOnEl = document.getElementById('ctl-int-on');
+    const contactOnEl = document.getElementById('ctl-cint-on');
+    const presetEl = document.getElementById('ctl-cpreset');
+    const cintReadout = document.getElementById('cint-readout');
     const statusEl = document.getElementById('status');
     const runBtn = document.getElementById('run-btn');
     const resetBtn = document.getElementById('reset-btn');
+
+    // Preset values for contact-reduction intervention.
+    // Y = sessions/week × typical close-contact count per session.
+    const PRESETS = {
+      soccer:     { cx: 1000, cy: 15 },   // 3 × 5
+      school:     { cx: 2500, cy: 50 },   // 5 × 10
+      office:     { cx: 500,  cy: 75 },   // 5 × 15
+      restaurants:{ cx: 3000, cy: 9 },    // 3 × 3
+      worship:    { cx: 800,  cy: 5 },    // 1 × 5
+      concert:    { cx: 5000, cy: 1.5 },  // 0.5 × 3
+      lockdown:   { cx: 8000, cy: 56 },   // 7 × 8
+    };
 
     function fmt(id, v) {
       const num = parseFloat(v);
@@ -882,7 +992,8 @@
       if (id === 'gamma') return num.toFixed(3);
       if (id === 'alpha' || id === 'kappa') return num.toFixed(2);
       if (id === 'ifactor') return num.toFixed(2) + '×';
-      if (id === 'm0' && num % 1 !== 0) return num.toFixed(1);
+      if (id === 'cy') return num.toFixed(1);
+      if ((id === 'm0' || id === 'cx') && num % 1 !== 0) return num.toFixed(1);
       return String(Math.round(num));
     }
 
@@ -894,7 +1005,30 @@
       const gamma = parseFloat(ctlEls.gamma.value);
       const r0 = (m0 * p) / gamma;
       document.getElementById('sum-r0').textContent = r0.toFixed(2);
+      // Contact intervention readout
+      const N = parseFloat(ctlEls.N.value);
+      const cx = parseFloat(ctlEls.cx.value);
+      const cy = parseFloat(ctlEls.cy.value);
+      const meetingsPerDay = cx * cy / 7;
+      const m0Reduction = meetingsPerDay / N;
+      const pct = m0 > 0 ? (m0Reduction / m0 * 100) : 0;
+      cintReadout.innerHTML = `Removes <strong>${meetingsPerDay.toLocaleString(undefined, {maximumFractionDigits:0})}</strong> meetings/day → effective m₀ drops by <strong>${m0Reduction.toFixed(3)}</strong> (${pct.toFixed(1)}%)`;
     }
+
+    // Preset → fill sliders
+    presetEl.addEventListener('change', () => {
+      const v = presetEl.value;
+      if (v in PRESETS) {
+        ctlEls.cx.value = PRESETS[v].cx;
+        ctlEls.cy.value = PRESETS[v].cy;
+        contactOnEl.checked = true;
+        scheduleRun();
+      }
+    });
+
+    // When user manually edits cx/cy, switch preset back to "Custom"
+    ctlEls.cx.addEventListener('input', () => { presetEl.value = 'custom'; });
+    ctlEls.cy.addEventListener('input', () => { presetEl.value = 'custom'; });
 
     let pendingRun = null;
     function scheduleRun() {
@@ -907,17 +1041,22 @@
     for (const id of ids) ctlEls[id].addEventListener('input', scheduleRun);
     behavioralEl.addEventListener('change', scheduleRun);
     intOnEl.addEventListener('change', scheduleRun);
+    contactOnEl.addEventListener('change', scheduleRun);
     runBtn.addEventListener('click', runSimulation);
 
     const defaults = {};
     for (const id of ids) defaults[id] = ctlEls[id].value;
     const defaultBehavioral = behavioralEl.checked;
     const defaultIntOn = intOnEl.checked;
+    const defaultContactOn = contactOnEl.checked;
+    const defaultPreset = presetEl.value;
 
     resetBtn.addEventListener('click', () => {
       for (const id of ids) ctlEls[id].value = defaults[id];
       behavioralEl.checked = defaultBehavioral;
       intOnEl.checked = defaultIntOn;
+      contactOnEl.checked = defaultContactOn;
+      presetEl.value = defaultPreset;
       scheduleRun();
     });
 
@@ -962,7 +1101,8 @@ def _solve_foc(alpha, kappa, V, m0, p_eff, prev):
 
 
 def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
-             behavioral, intervention_on, istart, iend, ifactor):
+             behavioral, intervention_on, istart, iend, ifactor,
+             contact_on, cstart, cend, cx, cy):
     T = int(T)
     N = float(N)
     S = np.zeros(T + 1)
@@ -970,6 +1110,7 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
     R = np.zeros(T + 1)
     theta_h = np.zeros(T + 1)
     e_h = np.zeros(T + 1)
+    m0_eff_h = np.zeros(T + 1)
     new_inf_h = np.zeros(T + 1)
     S[0] = N - I0
     I[0] = I0
@@ -981,14 +1122,25 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
 
     for t in range(T):
         prev = I[t] / N
+
+        # Mask intervention reduces p
         p_eff = p
         if intervention_on and istart <= t < iend:
             p_eff = p * ifactor
+
+        # Contact-reduction intervention reduces m0 (population-average meetings/day)
+        # X people × Y meetings/week = X*Y/7 meetings/day removed
+        # Divided by N → reduction in population-average m0
+        m0_eff = m0
+        if contact_on and cstart <= t < cend:
+            reduction = (cx * cy) / 7.0 / N
+            m0_eff = max(0.01, m0 - reduction)
+
         if behavioral:
-            theta, e = _solve_foc(alpha, kappa, V, m0, p_eff, prev)
+            theta, e = _solve_foc(alpha, kappa, V, m0_eff, p_eff, prev)
         else:
             theta, e = 1.0, 0.0
-        m_eff = theta * m0
+        m_eff = theta * m0_eff
         p_per_meeting = p_eff * (1.0 - e)
         # Per-susceptible per-day infection probability
         pi = 1.0 - (1.0 - p_per_meeting) ** (m_eff * prev) if (m_eff * prev) > 0 else 0.0
@@ -999,15 +1151,16 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
         R[t + 1] = R[t] + new_rec
         theta_h[t] = theta
         e_h[t] = e
+        m0_eff_h[t] = m0_eff
         new_inf_h[t] = new_inf
         # Welfare accumulation (per agent, summed across N)
-        # Approximation: everyone gets the same theta/e (mean-field rational)
         attendance_util += N * alpha * np.log1p(m_eff)
         precaution_cost += N * 0.5 * kappa * e * e
         infection_cost += V * new_inf
 
     theta_h[-1] = theta_h[-2] if T > 0 else 1.0
     e_h[-1] = e_h[-2] if T > 0 else 0.0
+    m0_eff_h[-1] = m0_eff_h[-2] if T > 0 else m0
     new_inf_h[-1] = 0.0
 
     welfare = attendance_util - precaution_cost - infection_cost
@@ -1017,6 +1170,7 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
         "R": R.tolist(),
         "theta": theta_h.tolist(),
         "e": e_h.tolist(),
+        "m0_eff": m0_eff_h.tolist(),
         "new_inf": new_inf_h.tolist(),
         "peak_I": float(I.max()),
         "final_R": float(R[-1]),
@@ -1076,6 +1230,11 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
         istart: get('istart'),
         iend: get('iend'),
         ifactor: get('ifactor'),
+        contact_on: contactOnEl.checked,
+        cstart: get('cstart'),
+        cend: get('cend'),
+        cx: get('cx'),
+        cy: get('cy'),
       };
     }
 
@@ -1095,6 +1254,9 @@ r = simulate(
     behavioral=_inp['behavioral'],
     intervention_on=_inp['intervention_on'],
     istart=_inp['istart'], iend=_inp['iend'], ifactor=_inp['ifactor'],
+    contact_on=_inp['contact_on'],
+    cstart=_inp['cstart'], cend=_inp['cend'],
+    cx=_inp['cx'], cy=_inp['cy'],
 )
 json.dumps(r)
 `);
@@ -1113,11 +1275,23 @@ json.dumps(r)
     function renderResults(data, inp) {
       const days = Array.from({ length: data.S.length }, (_, i) => i);
 
-      const intervBand = (inp.intervention_on && inp.istart < inp.iend) ? {
-        type: 'rect', xref: 'x', yref: 'paper',
-        x0: inp.istart, x1: inp.iend, y0: 0, y1: 1,
-        fillcolor: 'rgba(255, 165, 0, 0.10)', line: { width: 0 }
-      } : null;
+      const bands = [];
+      if (inp.intervention_on && inp.istart < inp.iend) {
+        bands.push({
+          type: 'rect', xref: 'x', yref: 'paper',
+          x0: inp.istart, x1: inp.iend, y0: 0, y1: 1,
+          fillcolor: 'rgba(234, 88, 12, 0.10)', line: { width: 0 },
+          layer: 'below',
+        });
+      }
+      if (inp.contact_on && inp.cstart < inp.cend) {
+        bands.push({
+          type: 'rect', xref: 'x', yref: 'paper',
+          x0: inp.cstart, x1: inp.cend, y0: 0, y1: 1,
+          fillcolor: 'rgba(22, 163, 74, 0.10)', line: { width: 0 },
+          layer: 'below',
+        });
+      }
 
       // SIR plot
       const sirData = [
@@ -1132,7 +1306,7 @@ json.dumps(r)
         legend: { orientation: 'h', y: 1.1 },
         font: { family: 'Inter, sans-serif', size: 12 },
         paper_bgcolor: 'white', plot_bgcolor: 'white',
-        shapes: intervBand ? [intervBand] : [],
+        shapes: bands,
       };
       Plotly.react('plot-sir', sirData, sirLayout, { responsive: true, displayModeBar: false });
 
@@ -1148,7 +1322,7 @@ json.dumps(r)
         legend: { orientation: 'h', y: 1.15 },
         font: { family: 'Inter, sans-serif', size: 12 },
         paper_bgcolor: 'white', plot_bgcolor: 'white',
-        shapes: intervBand ? [intervBand] : [],
+        shapes: bands,
       };
       Plotly.react('plot-behavior', behData, behLayout, { responsive: true, displayModeBar: false });
 
