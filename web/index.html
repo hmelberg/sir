@@ -501,11 +501,15 @@
 
     .summary-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 0.6rem;
     }
 
-    @media (max-width: 1100px) {
+    @media (max-width: 1300px) {
+      .summary-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    @media (max-width: 1050px) {
       .summary-grid { grid-template-columns: repeat(3, 1fr); }
     }
 
@@ -1168,6 +1172,14 @@
           <div class="summary-card">
             <div class="summary-label">Net welfare</div>
             <div class="summary-value compare" id="sum-welfare">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Total monetary cost / person</div>
+            <div class="summary-value compare" id="sum-cbatotal">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">$ / YLL averted</div>
+            <div class="summary-value" id="sum-cbaeff">—</div>
           </div>
         </div>
 
@@ -2158,6 +2170,28 @@ json.dumps(r)
       setCompareCard('sum-deaths', w.total_deaths, wo.total_deaths, v => Math.round(v).toLocaleString(), true);
       setCompareCard('sum-yll', w.total_yll, wo.total_yll, v => Math.round(v).toLocaleString() + ' yr', true);
       setCompareCard('sum-welfare', w.welfare, wo.welfare, formatWelfare, false);
+      // CBA cards
+      if (w.cba && wo.cba) {
+        setCompareCard(
+          'sum-cbatotal',
+          w.cba.total_monetary_per_capita,
+          wo.cba.total_monetary_per_capita,
+          v => '$' + Math.round(v).toLocaleString(),
+          true,
+        );
+        // Cost per YLL averted (treatment - baseline) / (baseline_yll - treatment_yll)
+        const deltaCost = w.cba.total_monetary_per_capita - wo.cba.total_monetary_per_capita;
+        const yllAverted = wo.cba.total_yll_per_capita - w.cba.total_yll_per_capita;
+        const cbaEff = document.getElementById('sum-cbaeff');
+        if (yllAverted > 1e-6) {
+          const ratio = deltaCost / yllAverted;
+          cbaEff.textContent = '$' + Math.round(ratio).toLocaleString();
+        } else if (Math.abs(yllAverted) < 1e-6) {
+          cbaEff.textContent = '—';
+        } else {
+          cbaEff.textContent = 'N/A (no YLL averted)';
+        }
+      }
     }
 
     // Re-render main plot whenever outcome dropdown changes
