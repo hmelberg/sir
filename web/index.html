@@ -366,6 +366,38 @@
       margin-bottom: 0;
     }
 
+    /* Expandable "Advanced" subsection inside a sidebar group */
+    details.advanced-group {
+      margin-top: 0.4rem;
+      font-family: 'Inter', sans-serif;
+    }
+
+    details.advanced-group summary {
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: var(--muted);
+      padding: 0.3rem 0;
+      user-select: none;
+      list-style: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    details.advanced-group summary::-webkit-details-marker { display: none; }
+
+    details.advanced-group summary::before {
+      content: '▸';
+      transition: transform 0.15s;
+      font-size: 0.7rem;
+    }
+
+    details.advanced-group[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    details.advanced-group summary:hover { color: var(--accent); }
+
     .select {
       width: 100%;
       padding: 0.4rem 0.5rem;
@@ -1002,6 +1034,100 @@
           <input type="range" id="ctl-yllpd" min="1" max="50" step="0.5" value="10" />
         </div>
 
+        <h3>Cost-benefit analysis</h3>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Discount rate (annual) <span class="info" data-tip="Standard CBA convention: 0.03 = 3%/year. Set to 0 to disable discounting; future YLL and costs count at full value.">?</span></span>
+            <span class="value" id="val-cbarate">3.0%</span>
+          </div>
+          <input type="range" id="ctl-cbarate" min="0" max="0.10" step="0.005" value="0.03" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Hospital cost / day <span class="info" data-tip="Cost per occupied hospital bed-day. Typical US estimate: $1,000–3,000.">?</span></span>
+            <span class="value" id="val-hcost">$1,500</span>
+          </div>
+          <input type="range" id="ctl-hcost" min="0" max="10000" step="100" value="1500" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">ICU cost / day <span class="info" data-tip="Cost per occupied ICU bed-day. Typical US estimate: $3,000–8,000.">?</span></span>
+            <span class="value" id="val-icucost">$4,000</span>
+          </div>
+          <input type="range" id="ctl-icucost" min="0" max="20000" step="200" value="4000" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Vaccine dose cost <span class="info" data-tip="Wholesale + distribution cost per dose. COVID-era: ~$20–50.">?</span></span>
+            <span class="value" id="val-dosecost">$25</span>
+          </div>
+          <input type="range" id="ctl-dosecost" min="0" max="500" step="5" value="25" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Average wage / day <span class="info" data-tip="Mean-field daily wage used for productivity-loss streams. Median working-age US: ~$250.">?</span></span>
+            <span class="value" id="val-wage">$250</span>
+          </div>
+          <input type="range" id="ctl-wage" min="0" max="1000" step="10" value="250" />
+        </div>
+
+        <div class="control">
+          <div class="control-label">
+            <span class="name">Value per YLL <span class="info" data-tip="Monetary value of one year of life. Used when monetizing health outcomes. Common health-economics threshold: ~$100,000.">?</span></span>
+            <span class="value" id="val-vyll">$100,000</span>
+          </div>
+          <input type="range" id="ctl-vyll" min="10000" max="500000" step="5000" value="100000" />
+        </div>
+
+        <details class="advanced-group">
+          <summary>Advanced CBA parameters</summary>
+
+          <div class="control">
+            <div class="control-label">
+              <span class="name">Outpatient cost / case <span class="info" data-tip="Mean cost of a non-hospitalized infection (visits, tests, time off). Typical: $100–500.">?</span></span>
+              <span class="value" id="val-outpcost">$200</span>
+            </div>
+            <input type="range" id="ctl-outpcost" min="0" max="2000" step="20" value="200" />
+          </div>
+
+          <div class="control">
+            <div class="control-label">
+              <span class="name">Vaccine admin cost <span class="info" data-tip="Clinician time + premises per dose. Typical: $20–50.">?</span></span>
+              <span class="value" id="val-admincost">$30</span>
+            </div>
+            <input type="range" id="ctl-admincost" min="0" max="200" step="5" value="30" />
+          </div>
+
+          <div class="control">
+            <div class="control-label">
+              <span class="name">Vaccine side-effect value <span class="info" data-tip="Willingness-to-pay to avoid post-vaccination side effects. Typical: $30–100.">?</span></span>
+              <span class="value" id="val-sidefx">$50</span>
+            </div>
+            <input type="range" id="ctl-sidefx" min="0" max="500" step="5" value="50" />
+          </div>
+
+          <div class="control">
+            <div class="control-label">
+              <span class="name">Value of time / hour <span class="info" data-tip="Used to monetize behavioral utility loss and precaution effort. EXCLUDES wages (those are in productivity streams). Typical: $15–40.">?</span></span>
+              <span class="value" id="val-vot">$25</span>
+            </div>
+            <input type="range" id="ctl-vot" min="5" max="200" step="1" value="25" />
+          </div>
+
+          <div class="control">
+            <div class="control-label">
+              <span class="name">Hours per meeting <span class="info" data-tip="Mean duration of a contact event, used for behavioral-loss monetization. Typical: 0.5–2 hours.">?</span></span>
+              <span class="value" id="val-hpermeeting">1.0</span>
+            </div>
+            <input type="range" id="ctl-hpermeeting" min="0.25" max="4" step="0.25" value="1.0" />
+          </div>
+        </details>
+
         <button class="run-btn" id="run-btn" disabled>Loading Python…</button>
         <button class="reset-btn" id="reset-btn">Reset to defaults</button>
 
@@ -1298,7 +1424,9 @@
                  'cx', 'cy', 'cz', 'cstart', 'cend',
                  'hosprate', 'icurate', 'hospdelay', 'icudelay', 'hosplos', 'iculos',
                  'deathrate', 'deathdelay', 'yllpd',
-                 'vdoses', 'vuptake', 'veff', 'vstart', 'vend'];
+                 'vdoses', 'vuptake', 'veff', 'vstart', 'vend',
+                 'cbarate', 'hcost', 'icucost', 'dosecost', 'wage', 'vyll',
+                 'outpcost', 'admincost', 'sidefx', 'vot', 'hpermeeting'];
     const valEls = {};
     const ctlEls = {};
     for (const id of ids) {
@@ -1342,6 +1470,12 @@
       if (id === 'vuptake') return (num * 100).toFixed(0) + '%';
       if (id === 'veff') return num.toFixed(2);
       if ((id === 'm0' || id === 'cx') && num % 1 !== 0) return num.toFixed(1);
+      if (id === 'cbarate') return (num * 100).toFixed(1) + '%';
+      if (id === 'hcost' || id === 'icucost' || id === 'dosecost'
+          || id === 'wage' || id === 'outpcost' || id === 'admincost'
+          || id === 'sidefx' || id === 'vot') return '$' + Math.round(num).toLocaleString();
+      if (id === 'vyll') return '$' + Math.round(num).toLocaleString();
+      if (id === 'hpermeeting') return num.toFixed(2);
       return String(Math.round(num));
     }
 
