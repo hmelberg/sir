@@ -644,6 +644,105 @@
       color: var(--muted);
     }
 
+    .cba-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-top: 1rem;
+    }
+
+    .cba-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .cba-card-header h4 {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .cba-card-header .toggle {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .cba-card-toplevel {
+      display: flex;
+      align-items: baseline;
+      gap: 1.5rem;
+      margin-top: 0.5rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.88rem;
+      flex-wrap: wrap;
+    }
+
+    .cba-card-toplevel .label {
+      color: var(--muted);
+    }
+
+    .cba-card-toplevel .value {
+      font-weight: 600;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .cba-details {
+      margin-top: 1rem;
+      display: none;
+    }
+
+    .cba-card[data-expanded="true"] .cba-details {
+      display: block;
+    }
+
+    .cba-bar-plot {
+      height: 280px;
+    }
+
+    .cba-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.8rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .cba-table th, .cba-table td {
+      padding: 0.4rem 0.6rem;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .cba-table th {
+      background: #f5f5f4;
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--muted);
+    }
+
+    .cba-table th:first-child, .cba-table td:first-child {
+      text-align: left;
+    }
+
+    .cba-table tr.total td {
+      font-weight: 600;
+      border-top: 2px solid var(--border);
+      border-bottom: none;
+    }
+
+    .cba-table .delta-good { color: var(--r-color); }
+    .cba-table .delta-bad { color: var(--i-color); }
+
     .plot-card {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -1216,6 +1315,33 @@
             </div>
           </div>
           <div id="plot-main" class="plot"></div>
+        </div>
+
+        <div class="cba-card" id="cba-card" data-expanded="false">
+          <div class="cba-card-header" id="cba-card-header">
+            <h4>Cost-benefit analysis (per capita) <span class="info" data-tip="Decomposition of intervention costs and benefits into 9 streams. Click the header to expand for details.">?</span></h4>
+            <span class="toggle" id="cba-card-toggle">▸ Expand</span>
+          </div>
+          <div class="cba-card-toplevel">
+            <span><span class="label">Δ monetary cost:</span> <span class="value" id="cba-top-delta">—</span></span>
+            <span><span class="label">YLL averted:</span> <span class="value" id="cba-top-yll">—</span></span>
+            <span><span class="label">$/YLL averted:</span> <span class="value" id="cba-top-ratio">—</span></span>
+          </div>
+          <div class="cba-details">
+            <div id="plot-cba" class="cba-bar-plot"></div>
+            <table class="cba-table">
+              <thead>
+                <tr>
+                  <th>Stream</th>
+                  <th>Baseline</th>
+                  <th>Treatment</th>
+                  <th>Δ</th>
+                  <th>Unit</th>
+                </tr>
+              </thead>
+              <tbody id="cba-table-body"></tbody>
+            </table>
+          </div>
         </div>
 
         <div class="intervention-panel">
@@ -2084,6 +2210,7 @@ json.dumps(r)
       lastInp = inp;
       renderMainPlot();
       renderSummary(data, inp);
+      renderCBACard(data, inp);
     }
 
     function renderMainPlot() {
@@ -2193,6 +2320,134 @@ json.dumps(r)
         }
       }
     }
+
+    const STREAM_DISPLAY_ORDER = [
+      "direct_medical", "vaccination_program",
+      "productivity_illness", "productivity_death",
+      "behavioral_loss", "precaution_cost", "policy_costs",
+      "yll", "morbidity_qaly",
+    ];
+
+    const STREAM_LABELS = {
+      direct_medical: "Direct medical",
+      vaccination_program: "Vaccination program",
+      productivity_illness: "Productivity (illness)",
+      productivity_death: "Productivity (death)",
+      behavioral_loss: "Behavioral loss",
+      precaution_cost: "Precaution effort",
+      policy_costs: "Policy direct costs",
+      yll: "YLL",
+      morbidity_qaly: "Morbidity QALY",
+    };
+
+    const STREAM_COLORS = {
+      direct_medical: "#0891b2",
+      vaccination_program: "#7c3aed",
+      productivity_illness: "#ea580c",
+      productivity_death: "#9f1239",
+      behavioral_loss: "#84cc16",
+      precaution_cost: "#facc15",
+      policy_costs: "#94a3b8",
+      yll: "#be123c",
+      morbidity_qaly: "#db2777",
+    };
+
+    function formatMoney(v) {
+      const abs = Math.abs(v);
+      if (abs >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
+      if (abs >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'k';
+      return '$' + v.toFixed(0);
+    }
+
+    function formatStreamValue(v, unit) {
+      if (unit === '$/p') return formatMoney(v);
+      return v.toFixed(3);
+    }
+
+    function renderCBACard(data, inp) {
+      if (!data.with_int.cba || !data.without_int.cba) return;
+      const wcba = data.with_int.cba;
+      const wocba = data.without_int.cba;
+      const deltaMonetary = wcba.total_monetary_per_capita - wocba.total_monetary_per_capita;
+      const yllAverted = wocba.total_yll_per_capita - wcba.total_yll_per_capita;
+
+      // Top-level summary
+      document.getElementById('cba-top-delta').textContent = formatMoney(deltaMonetary);
+      document.getElementById('cba-top-yll').textContent = yllAverted.toFixed(4) + ' YLL/p';
+      const ratioEl = document.getElementById('cba-top-ratio');
+      if (Math.abs(yllAverted) > 1e-6) {
+        ratioEl.textContent = formatMoney(deltaMonetary / yllAverted);
+      } else {
+        ratioEl.textContent = '—';
+      }
+
+      // Stacked-bar Plotly trace (monetary streams only)
+      const monetaryStreams = STREAM_DISPLAY_ORDER.filter(
+        k => wcba.units[k] === '$/p'
+      );
+      const traces = [];
+      for (const stream of monetaryStreams) {
+        traces.push({
+          x: ['Baseline', 'Treatment'],
+          y: [wocba.streams[stream], wcba.streams[stream]],
+          name: STREAM_LABELS[stream],
+          type: 'bar',
+          marker: { color: STREAM_COLORS[stream] },
+        });
+      }
+      const layout = {
+        barmode: 'stack',
+        margin: { l: 60, r: 20, t: 10, b: 40 },
+        yaxis: { title: '$ / person', gridcolor: '#f0f0f0' },
+        xaxis: { gridcolor: '#f0f0f0' },
+        legend: { orientation: 'v', x: 1.02, y: 1.0, font: { size: 11 } },
+        font: { family: 'Inter, sans-serif', size: 12 },
+        paper_bgcolor: 'white', plot_bgcolor: 'white',
+      };
+      Plotly.react('plot-cba', traces, layout, { responsive: true, displayModeBar: false });
+
+      // Stream-by-stream table
+      const tbody = document.getElementById('cba-table-body');
+      tbody.innerHTML = '';
+      for (const stream of STREAM_DISPLAY_ORDER) {
+        const unit = wcba.units[stream];
+        const b = wocba.streams[stream];
+        const t = wcba.streams[stream];
+        const d = t - b;
+        const goodIfLower = !(stream === 'vaccination_program' || stream === 'policy_costs');
+        const goodClass = (d < 0 && goodIfLower) || (d > 0 && !goodIfLower)
+          ? 'delta-good'
+          : (Math.abs(d) < 1e-9 ? '' : 'delta-bad');
+        const dStr = (d >= 0 ? '+' : '−') + formatStreamValue(Math.abs(d), unit);
+        const row = `<tr>
+          <td>${STREAM_LABELS[stream]}</td>
+          <td>${formatStreamValue(b, unit)}</td>
+          <td>${formatStreamValue(t, unit)}</td>
+          <td class="${goodClass}">${dStr}</td>
+          <td>${unit}</td>
+        </tr>`;
+        tbody.insertAdjacentHTML('beforeend', row);
+      }
+      // Total row
+      const totalRow = `<tr class="total">
+        <td>TOTAL monetary</td>
+        <td>${formatMoney(wocba.total_monetary_per_capita)}</td>
+        <td>${formatMoney(wcba.total_monetary_per_capita)}</td>
+        <td class="${deltaMonetary < 0 ? 'delta-good' : 'delta-bad'}">${(deltaMonetary >= 0 ? '+' : '−') + formatMoney(Math.abs(deltaMonetary))}</td>
+        <td>$/p</td>
+      </tr>`;
+      tbody.insertAdjacentHTML('beforeend', totalRow);
+    }
+
+    // Wire the expand/collapse header click
+    document.getElementById('cba-card-header').addEventListener('click', () => {
+      const card = document.getElementById('cba-card');
+      const expanded = card.dataset.expanded === 'true';
+      card.dataset.expanded = expanded ? 'false' : 'true';
+      document.getElementById('cba-card-toggle').textContent = expanded ? '▸ Expand' : '▾ Collapse';
+      // Re-render plot when expanding (Plotly needs visible container)
+      if (!expanded && typeof lastResult !== 'undefined' && lastResult) renderCBACard(lastResult, lastInp);
+    });
 
     // Re-render main plot whenever outcome dropdown changes
     document.addEventListener('DOMContentLoaded', () => {});
