@@ -1604,7 +1604,10 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
              contact_on, cstart, cend, cx, cy, cz,
              hosp_rate, icu_rate, hosp_delay, icu_delay, hosp_los, icu_los,
              death_rate, death_delay, yll_per_death,
-             vax_on, vstart, vend, vdoses, vuptake, veff):
+             vax_on, vstart, vend, vdoses, vuptake, veff,
+             cba_rate, hcost, icucost, dosecost, wage, vyll,
+             outpcost, admincost, sidefx, vot, hpermeeting,
+             policy_cost_per_day):
     T = int(T)
     N = float(N)
     S = np.zeros(T + 1)
@@ -1713,6 +1716,128 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
     cum_vax = np.cumsum(new_vax_h)
     total_vax = float(cum_vax[-1])
 
+    # ============================ CBA: 9 cost streams ============================
+    # Hidden constants (not exposed in UI; documented here)
+    DW_SYMP = 0.15
+    DW_HOSP = 0.50
+    DW_ICU = 0.80
+    WORKING_DAYS_PER_YEAR = 260
+    REMAINING_WORKING_YEARS = 20  # mean-field; no age structure in this model
+
+    # Daily discount factor array (length T+1)
+    days_arr = np.arange(T + 1)
+    disc_arr = (1.0 + cba_rate) ** (-days_arr / 365.0)
+
+    # Effective sick days per case (with mean-field hospitalization & ICU rates)
+    sick_days_symptomatic = 7.0
+    sick_days_hosp_extra = 14.0
+    sick_days_icu_extra = 21.0
+    sick_days_effective = (
+        sick_days_symptomatic
+        + hosp_rate * sick_days_hosp_extra
+        + icu_rate * sick_days_icu_extra
+    )
+
+    # Stream 1: Direct medical
+    s1_raw = hosp_prev * hcost + icu_prev * icucost + new_inf_h * outpcost
+    s1_per_day = s1_raw * disc_arr / N
+    s1_total = float(s1_per_day.sum())
+
+    # Stream 2: Vaccination program
+    per_dose_cost = dosecost + admincost + sidefx
+    s2_raw = new_vax_h * per_dose_cost
+    s2_per_day = s2_raw * disc_arr / N
+    s2_total = float(s2_per_day.sum())
+
+    # Stream 3: Productivity from illness
+    s3_raw = new_inf_h * wage * sick_days_effective
+    s3_per_day = s3_raw * disc_arr / N
+    s3_total = float(s3_per_day.sum())
+
+    # Stream 4: Productivity from death
+    loss_per_death = wage * REMAINING_WORKING_YEARS * WORKING_DAYS_PER_YEAR
+    s4_raw = daily_deaths * loss_per_death
+    s4_per_day = s4_raw * disc_arr / N
+    s4_total = float(s4_per_day.sum())
+
+    # Stream 5: YLL with PV-form discounting
+    if cba_rate > 0:
+        pv_yll = (1.0 - np.exp(-cba_rate * yll_per_death)) / cba_rate
+    else:
+        pv_yll = yll_per_death
+    s5_raw = daily_deaths * pv_yll
+    s5_per_day = s5_raw * disc_arr / N
+    s5_total = float(s5_per_day.sum())
+
+    # Stream 6: Acute morbidity QALY (mean-field)
+    qaly_per_case = (
+        DW_SYMP * sick_days_symptomatic / 365.0
+        + hosp_rate * DW_HOSP * sick_days_hosp_extra / 365.0
+        + icu_rate * DW_ICU * sick_days_icu_extra / 365.0
+    )
+    s6_raw = new_inf_h * qaly_per_case
+    s6_per_day = s6_raw * disc_arr / N
+    s6_total = float(s6_per_day.sum())
+
+    # Stream 7: Behavioral utility loss
+    # theta_h is per-agent attendance multiplier; lost meetings/person/day = (1-θ)·m₀
+    # Already per-capita; no N division.
+    lost_meetings_per_p = (1.0 - theta_h) * m0
+    s7_raw = lost_meetings_per_p * hpermeeting * vot
+    s7_per_day = s7_raw * disc_arr
+    s7_total = float(s7_per_day.sum())
+
+    # Stream 8: Precaution effort cost (per-agent; already per-capita; no N division)
+    s8_raw = (e_h ** 2) * vot * hpermeeting
+    s8_per_day = s8_raw * disc_arr
+    s8_total = float(s8_per_day.sum())
+
+    # Stream 9: Policy costs (constant daily total $; per-capita)
+    s9_raw = np.full(T + 1, policy_cost_per_day, dtype=np.float64)
+    s9_per_day = s9_raw * disc_arr / N
+    s9_total = float(s9_per_day.sum())
+
+    # Aggregates
+    monetary_streams_total = s1_total + s2_total + s3_total + s4_total + s7_total + s8_total + s9_total
+
+    cba_per_day_monetary = (
+        s1_per_day + s2_per_day + s3_per_day + s4_per_day
+        + s7_per_day + s8_per_day + s9_per_day
+    )
+    cba_cumulative_monetary = cba_per_day_monetary.cumsum()
+    cba_cumulative_yll = s5_per_day.cumsum()
+
+    cba = {
+        "streams": {
+            "direct_medical": s1_total,
+            "vaccination_program": s2_total,
+            "productivity_illness": s3_total,
+            "productivity_death": s4_total,
+            "yll": s5_total,
+            "morbidity_qaly": s6_total,
+            "behavioral_loss": s7_total,
+            "precaution_cost": s8_total,
+            "policy_costs": s9_total,
+        },
+        "units": {
+            "direct_medical": "$/p",
+            "vaccination_program": "$/p",
+            "productivity_illness": "$/p",
+            "productivity_death": "$/p",
+            "yll": "YLL/p",
+            "morbidity_qaly": "QALY/p",
+            "behavioral_loss": "$/p",
+            "precaution_cost": "$/p",
+            "policy_costs": "$/p",
+        },
+        "total_monetary_per_capita": float(monetary_streams_total),
+        "total_yll_per_capita": float(s5_total),
+        "total_qaly_per_capita": float(s6_total),
+        "cumulative_monetary": cba_cumulative_monetary.tolist(),
+        "cumulative_yll": cba_cumulative_yll.tolist(),
+    }
+    # ============================ end CBA ============================
+
     welfare = attendance_util - precaution_cost - infection_cost
     return {
         "S": S.tolist(),
@@ -1742,6 +1867,7 @@ def simulate(N, T, I0, m0, p, gamma, V, alpha, kappa,
         "precaution_cost": float(precaution_cost),
         "infection_cost": float(infection_cost),
         "welfare": float(welfare),
+        "cba": cba,
     }
 
 
@@ -1749,7 +1875,7 @@ def simulate_pair(**kw):
     """Run the simulation with the user's settings and with all interventions
     disabled (counterfactual baseline). Returns both for side-by-side plotting."""
     with_r = simulate(**kw)
-    baseline_kw = {**kw, "intervention_on": False, "contact_on": False, "vax_on": False}
+    baseline_kw = {**kw, "intervention_on": False, "contact_on": False, "vax_on": False, "policy_cost_per_day": 0.0}
     without_r = simulate(**baseline_kw)
     return {"with_int": with_r, "without_int": without_r}
 `;
@@ -1785,6 +1911,13 @@ def simulate_pair(**kw):
     }
 
     // ============================ Run + plot ============================
+
+    function _computePolicyCostPerDay() {
+      // Mask mandate, vaccination, contact reduction don't have explicit cost
+      // sliders in the demo yet. Returns 0 for now; future versions can add
+      // direct-cost-per-day sliders per intervention.
+      return 0.0;
+    }
 
     function getInputs() {
       const get = id => parseFloat(ctlEls[id].value);
@@ -1824,6 +1957,18 @@ def simulate_pair(**kw):
         vdoses: get('vdoses'),
         vuptake: get('vuptake'),
         veff: get('veff'),
+        cba_rate: get('cbarate'),
+        hcost: get('hcost'),
+        icucost: get('icucost'),
+        dosecost: get('dosecost'),
+        wage: get('wage'),
+        vyll: get('vyll'),
+        outpcost: get('outpcost'),
+        admincost: get('admincost'),
+        sidefx: get('sidefx'),
+        vot: get('vot'),
+        hpermeeting: get('hpermeeting'),
+        policy_cost_per_day: _computePolicyCostPerDay(),
       };
     }
 
@@ -1854,6 +1999,12 @@ r = simulate_pair(
     vax_on=_inp['vax_on'],
     vstart=_inp['vstart'], vend=_inp['vend'],
     vdoses=_inp['vdoses'], vuptake=_inp['vuptake'], veff=_inp['veff'],
+    cba_rate=_inp['cba_rate'],
+    hcost=_inp['hcost'], icucost=_inp['icucost'], dosecost=_inp['dosecost'],
+    wage=_inp['wage'], vyll=_inp['vyll'],
+    outpcost=_inp['outpcost'], admincost=_inp['admincost'], sidefx=_inp['sidefx'],
+    vot=_inp['vot'], hpermeeting=_inp['hpermeeting'],
+    policy_cost_per_day=_inp['policy_cost_per_day'],
 )
 json.dumps(r)
 `);
