@@ -775,6 +775,7 @@ result.welfare.by_day[10]                     # day-10 breakdown</pre>
         <li><strong>Healthcare is post-processing.</strong> No capacity-dependent mortality, no hospital→ICU transition dynamics.</li>
         <li><strong>Exogenous vaccination.</strong> Vaccination is policy-controlled; agents do not choose to vaccinate.</li>
         <li><strong>One welfare measure.</strong> The 6-component decomposition reflects modeling choices; other formulations (e.g. equity-weighted, or splitting morbidity from mortality) are not implemented.</li>
+        <li><strong>Browser demo includes a simplified CBA.</strong> The interactive demo (<a href="index.html">link</a>) computes a 9-stream cost-benefit report using mean-field rates rather than age-stratified ones. The Python <code>sir.cba</code> module is the full version; the demo is an intuition-builder.</li>
         <li><strong>Atomism.</strong> Agents take aggregate prevalence as exogenous. This is what generates the externality but means no individual game theory between agents.</li>
       </ul>
 

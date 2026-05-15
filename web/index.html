@@ -936,6 +936,24 @@
       </tbody>
     </table>
 
+    <h3>Cost-benefit decomposition</h3>
+
+    <p>The simulation also computes a 9-stream cost-benefit report below the outcome plot, mirroring the Python <code>sir.cba</code> module. The streams are computed independently of the welfare ledger above (which is the agent's perceived bundled cost driving FOCs) — they're a separate <strong>social</strong> accounting:</p>
+
+    <ol style="font-size: 0.95rem;">
+      <li>Direct medical (hospital + ICU + outpatient)</li>
+      <li>Vaccination program (dose + admin + side-effect)</li>
+      <li>Productivity loss from illness (wage × sick days)</li>
+      <li>Productivity loss from death (wage × remaining working years × 260)</li>
+      <li>YLL (deaths × yll/death, with present-value discounting)</li>
+      <li>Acute morbidity QALY (disability weights × sick days)</li>
+      <li>Behavioral utility loss (lost meetings × hours × VOT)</li>
+      <li>Precaution effort cost (e² × VOT × hours)</li>
+      <li>Policy direct costs (admin/enforcement)</li>
+    </ol>
+
+    <p>All monetary streams are reported per capita ($/person) so scenarios at different population sizes are directly comparable. Health streams (YLL, QALY) are reported per capita in their natural units. The CBA layer uses simpler mean-field rates than the Python package (which is age-stratified), but the formulas otherwise match — see <a href="docs.html#api">the documentation</a> for the age-stratified version.</p>
+
     <h2>5. Contact structure (full model)</h2>
 
     <p>The simulation in this page uses a <strong>single composite group</strong> with mean-field mixing for tractability. The full ABM in the underlying Python package extends this with a <strong>bipartite agent–group structure</strong> across seven group types:</p>
