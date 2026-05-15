@@ -1311,6 +1311,10 @@
                   <option value="cum_vax">Cumulative vaccinated</option>
                   <option value="new_vax">Vaccinations per day</option>
                 </optgroup>
+                <optgroup label="Cost-benefit">
+                  <option value="cba_cumulative_monetary">Cumulative monetary cost (per capita)</option>
+                  <option value="cba_cumulative_yll">Cumulative YLL (per capita)</option>
+                </optgroup>
               </select>
             </div>
           </div>
@@ -2177,6 +2181,8 @@ json.dumps(r)
       Vax:        { label: 'Currently vaccinated',         ytitle: 'Vaccinated (still at risk)', fmt: ',d' },
       cum_vax:    { label: 'Cumulative vaccinated',        ytitle: 'Cumulative vaccinated',   fmt: ',d' },
       new_vax:    { label: 'Vaccinations per day',         ytitle: 'Doses administered / day', fmt: ',d' },
+      cba_cumulative_monetary: { label: 'Cumulative monetary cost / person', ytitle: '$ / person',  fmt: ',.0f' },
+      cba_cumulative_yll:      { label: 'Cumulative YLL / person',           ytitle: 'YLL / person', fmt: ',.3f' },
     };
 
     function bandsForInp(inp) {
@@ -2219,8 +2225,13 @@ json.dumps(r)
       const inp = lastInp;
       const outcomeKey = document.getElementById('ctl-outcome').value;
       const meta = OUTCOME_META[outcomeKey] || OUTCOME_META.I;
-      const withSeries = data.with_int[outcomeKey];
-      const withoutSeries = data.without_int[outcomeKey];
+      function _resolveSeries(side) {
+        if (outcomeKey === 'cba_cumulative_monetary') return side.cba.cumulative_monetary;
+        if (outcomeKey === 'cba_cumulative_yll') return side.cba.cumulative_yll;
+        return side[outcomeKey];
+      }
+      const withSeries = _resolveSeries(data.with_int);
+      const withoutSeries = _resolveSeries(data.without_int);
       const days = Array.from({ length: withSeries.length }, (_, i) => i);
 
       const hasIntervention = inp.intervention_on || inp.contact_on;
